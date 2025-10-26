@@ -1,5 +1,4 @@
 import styles from './CardReporte.module.css';
-import type { Report } from './types';
 
 export default function Ojo({ title, date, status, icon }: { title: string; date: string; status: string; icon: string }) {
   return (

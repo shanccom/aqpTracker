@@ -1,4 +1,3 @@
-import React from 'react';
 import styles from './PerfilHeader.module.css';
 
 export default function PerfilHeader() {

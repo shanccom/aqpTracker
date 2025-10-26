@@ -1,67 +1,120 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import type { Credentials, ProfileShape } from './authService';
-import * as service from './authService';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import LoginModal from './LoginModal';
+import RegisterModal from './RegisterModal';
+import * as authService from '../../services/authService';
+import { setAccessToken } from '../../api/tokenStore';
+import { getProfile } from '../../services/authService';
 
-type AuthContextType = {
-  user: ProfileShape | null;
-  accessToken: string | null;
+type Profile = authService.ProfileShape;
+
+type Credentials = { email: string; password: string };
+
+type AuthContextValue = {
+  user: Profile | null;
   login: (creds: Credentials) => Promise<void>;
   logout: () => Promise<void>;
   openLogin: () => void;
+  openRegister: () => void;
   closeLogin: () => void;
-  isLoginOpen: boolean;
+  closeRegister: () => void;
+  refreshProfile: () => Promise<Profile | undefined>;
 };
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<ProfileShape | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [isLoginOpen, setLoginOpen] = useState(false);
+export default function AuthProvider({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const [user, setUser] = useState<Profile | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
 
-  // keep refresh in localStorage (simple approach)
+  // Restore session on mount if refresh token exists
   useEffect(() => {
-    const refresh = localStorage.getItem('refresh');
-    if (refresh) {
-      // try to refresh once at startup
-      service.refreshToken(refresh).then(r => {
-        setAccessToken(r.access);
-        if (r.refresh) localStorage.setItem('refresh', r.refresh);
-      }).catch(() => {
+    let mounted = true;
+    async function restore() {
+      const refresh = localStorage.getItem('refresh');
+      if (!refresh) return;
+        try {
+          const data = await authService.refreshToken(refresh);
+          setAccessToken(data.access);
+          if (data.refresh) localStorage.setItem('refresh', data.refresh);
+          // fetch profile
+          const profile = await getProfile();
+          if (mounted) {
+            setUser(profile);
+            // navigate to profile after successful restore
+            navigate('/Perfil');
+          }
+      } catch (e) {
+        // failed to restore session
         localStorage.removeItem('refresh');
-      });
+        setAccessToken(null);
+        if (mounted) setUser(null);
+      }
     }
+    restore();
+    return () => { mounted = false; };
   }, []);
 
   async function login(creds: Credentials) {
-    const data = await service.login(creds);
-    setAccessToken(data.access);
-    localStorage.setItem('refresh', data.refresh);
-    setUser(data.profile);
+  const res = await authService.login(creds);
+  setAccessToken(res.access);
+    if (res.refresh) localStorage.setItem('refresh', res.refresh);
+    setUser(res.profile);
     setLoginOpen(false);
+    // navigate to profile after login
+    navigate('/Perfil');
+  }
+
+  // allow manual refresh of profile (useful if admin edits user or to revalidate)
+  async function refreshProfile() {
+    try {
+      const profile = await getProfile();
+      setUser(profile);
+      return profile;
+    } catch (e) {
+      // on failure, clear user (or keep existing?) — here we clear tokens
+      localStorage.removeItem('refresh');
+      setAccessToken(null);
+      setUser(null);
+      throw e;
+    }
   }
 
   async function logout() {
-    const refresh = localStorage.getItem('refresh');
-    await service.logoutServer(refresh || undefined);
-    localStorage.removeItem('refresh');
-    setAccessToken(null);
-    setUser(null);
+    const refresh = localStorage.getItem('refresh') || undefined;
+    try {
+      await authService.logoutServer(refresh);
+    } finally {
+      localStorage.removeItem('refresh');
+      setAccessToken(null);
+      setUser(null);
+    }
   }
 
-  const value = useMemo(() => ({ user, accessToken, login, logout, openLogin: () => setLoginOpen(true), closeLogin: () => setLoginOpen(false), isLoginOpen }), [user, accessToken, isLoginOpen]);
+  const value: AuthContextValue = {
+    user,
+    login,
+    logout,
+    openLogin: () => setLoginOpen(true),
+    openRegister: () => setRegisterOpen(true),
+    closeLogin: () => setLoginOpen(false),
+    closeRegister: () => setRegisterOpen(false),
+    refreshProfile,
+  };
 
   return (
     <AuthContext.Provider value={value}>
       {children}
-      <LoginModal open={isLoginOpen} onClose={() => setLoginOpen(false)} />
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }

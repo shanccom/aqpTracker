@@ -3,7 +3,7 @@ import styles from './LoginModal.module.css';
 import { useAuth } from './AuthProvider';
 
 export default function LoginModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { login } = useAuth();
+  const { login, openRegister } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,6 +37,12 @@ export default function LoginModal({ open, onClose }: { open: boolean; onClose: 
             Contraseña
             <input value={password} onChange={e => setPassword(e.target.value)} type="password" />
           </label>
+          <div className={styles.row} style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <small className="text-sm text-gray-500">¿No tienes cuenta?</small>
+            <button type="button" className="text-sm text-emerald-600 hover:underline" onClick={() => { onClose(); openRegister(); }}>
+              Regístrate
+            </button>
+          </div>
           {error && <div className={styles.error}>{error}</div>}
           <div className={styles.actions}>
             <button type="button" onClick={onClose} className={styles.btn}>Cancelar</button>
