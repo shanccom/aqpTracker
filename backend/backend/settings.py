@@ -41,8 +41,9 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework', 
     'rutas',
+    'foro',
+    'usuario'
     
-    'rest_framework',
 ]
 
 MIDDLEWARE = [
