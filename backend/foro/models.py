@@ -17,7 +17,7 @@ class Estado(models.Model):
         return self.nombre
 
 class Incidencia(models.Model):
-    usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE, related_name='incidencias')  # dueño de la incidencia
+    usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE, related_name='incidencias') 
     titulo = models.CharField(max_length=120)
     descripcion = models.TextField()
     imagen = models.ImageField(upload_to='incidencias/', blank=True, null=True)
