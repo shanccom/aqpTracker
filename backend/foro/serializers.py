@@ -75,12 +75,27 @@ class IncidenciaSerializer(serializers.ModelSerializer):
         ]
 
 
+class IncidenciaMinSerializer(serializers.ModelSerializer):
+    """Compact incidencia representation for lists (used inside Reporte list)."""
+    distrito = serializers.CharField(source='distrito.nombre', read_only=True)
+    estado = serializers.CharField(source='estado.nombre', read_only=True)
+    imagen = serializers.ImageField(source='imagen', read_only=True)
+
+    class Meta:
+        model = Incidencia
+        fields = ['id', 'titulo', 'imagen', 'distrito', 'estado', 'latitud', 'longitud']
+
+
 class ReporteSerializer(serializers.ModelSerializer):
     usuario = PerfilMinSerializer(read_only=True)
+    # nested read-only incidencia summary
+    incidencia = IncidenciaMinSerializer(read_only=True)
+    # allow writing incidencia by id (write-only)
+    incidencia_id = serializers.PrimaryKeyRelatedField(write_only=True, source='incidencia', queryset=Incidencia.objects.all())
 
     class Meta:
         model = Reporte
-        fields = ['id', 'usuario', 'incidencia', 'fecha_reporte']
+        fields = ['id', 'usuario', 'incidencia', 'incidencia_id', 'fecha_reporte']
 
 
 class NotificacionSerializer(serializers.ModelSerializer):

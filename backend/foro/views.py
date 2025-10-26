@@ -110,6 +110,17 @@ class NotificacionViewSet(viewsets.ModelViewSet):
             from usuario.models import Perfil as PerfilModel
             perfil = PerfilModel.objects.filter(user=self.request.user).first()
         return Notificacion.objects.filter(usuario=perfil).order_by('-fecha_creacion')
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def mark_all_read(self, request):
+        """Mark all notifications for the current user as read."""
+        perfil = getattr(request.user, 'perfil', None)
+        if not perfil:
+            from usuario.models import Perfil as PerfilModel
+            perfil = PerfilModel.objects.filter(user=request.user).first()
+        qs = Notificacion.objects.filter(usuario=perfil, leida=False)
+        updated = qs.update(leida=True)
+        return Response({'marked': updated}, status=status.HTTP_200_OK)
 from django.shortcuts import render
 
 # Create your views here.

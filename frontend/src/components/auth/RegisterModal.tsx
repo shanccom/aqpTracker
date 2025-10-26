@@ -21,7 +21,6 @@ export default function RegisterModal({ open, onClose }: { open: boolean; onClos
     setLoading(true);
     setError(null);
     try {
-      // send as FormData if a file is present (or include telefono)
       const fd = new FormData();
       fd.append('first_name', firstName);
       fd.append('last_name', lastName);
@@ -30,7 +29,6 @@ export default function RegisterModal({ open, onClose }: { open: boolean; onClos
       fd.append('telefono', telefono || '');
       if (fotoFile) fd.append('foto', fotoFile);
       await apiRegister(fd as any);
-      // optionally auto-login after register if backend supports same credentials
       await login({ email, password });
       onClose();
     } catch (err: any) {

@@ -46,6 +46,23 @@ export async function getMyReports(page = 1, pageSize = 10) {
   return res.data as { count: number; next: string | null; previous: string | null; results: Array<{ id: number; nombre: string; tipo: string; fecha: string; estado?: string }> };
 }
 
+export async function getNotifications(page = 1, pageSize = 10, unreadOnly = false) {
+  const params: any = { page, page_size: pageSize };
+  if (unreadOnly) params.leida = false;
+  const res = await api.get('/api/foro/notificacion/', { params });
+  return res.data as { count: number; next: string | null; previous: string | null; results: Array<any> };
+}
+
+export async function markNotificationRead(id: number) {
+  const res = await api.patch(`/api/foro/notificacion/${id}/`, { leida: true });
+  return res.data;
+}
+
+export async function markAllNotificationsRead() {
+  const res = await api.post('/api/foro/notificacion/mark_all_read/');
+  return res.data as { marked: number };
+}
+
 // Fetch current user's profile
 export async function getProfile() {
   const res = await api.get('/api/usuario/perfil/');
