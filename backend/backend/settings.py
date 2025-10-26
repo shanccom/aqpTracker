@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework', 
     'rutas',
+    
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
