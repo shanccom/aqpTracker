@@ -76,6 +76,21 @@ class ReporteViewSet(viewsets.ModelViewSet):
             perfil = PerfilModel.objects.filter(user=self.request.user).first()
         serializer.save(usuario=perfil)
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        """Return reportes created by the authenticated user (paginated)."""
+        perfil = getattr(request.user, 'perfil', None)
+        if not perfil:
+            from usuario.models import Perfil as PerfilModel
+            perfil = PerfilModel.objects.filter(user=request.user).first()
+        qs = self.queryset.filter(usuario=perfil)
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
 
 class TipoReaccionViewSet(viewsets.ModelViewSet):
     queryset = TipoReaccion.objects.all()

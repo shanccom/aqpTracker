@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers as drf_serializers
 from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.contrib.auth.models import User
 from .serializers import RegistroSerializer, MyTokenObtainPairSerializer, PerfilCompletoSerializer, CambiarPasswordSerializer
 from .models import Perfil
@@ -12,6 +13,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 # REGISTRO
 class RegistroView(generics.CreateAPIView):
     serializer_class = RegistroSerializer
+    # allow multipart/form-data for optional foto upload
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 # LOGIN JWT
 class LoginView(TokenObtainPairView):
@@ -48,7 +51,7 @@ class LoginView(TokenObtainPairView):
         profile_data = None
         if user:
             perfil, _ = Perfil.objects.get_or_create(user=user)
-            profile_data = PerfilCompletoSerializer(perfil).data
+            profile_data = PerfilCompletoSerializer(perfil, context={'request': request}).data
 
         # Devolver tokens y datos de perfil
         response_data = dict(serializer.validated_data)
@@ -81,6 +84,8 @@ class LogoutView(APIView):
 
 class PerfilUsuarioView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
+    # allow JSON and multipart/form-data (for uploading 'foto')
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_serializer_class(self):
         if self.request.method in ('PATCH', 'PUT'):

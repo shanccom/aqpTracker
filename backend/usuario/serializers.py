@@ -12,10 +12,12 @@ class PerfilSerializer(serializers.ModelSerializer):
 
 class RegistroSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+    telefono = serializers.CharField(required=False, allow_blank=True)
+    foto = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = User
-        fields = ['email', 'password', 'first_name', 'last_name']
+        fields = ['email', 'password', 'first_name', 'last_name', 'telefono', 'foto']
 
     def create(self, validated_data):
         # Normalize email
@@ -30,8 +32,10 @@ class RegistroSerializer(serializers.ModelSerializer):
             )
         except IntegrityError:
             raise serializers.ValidationError({'email': 'Este correo ya está registrado'})
-
-        Perfil.objects.create(user=user)
+        # create profile and set optional fields
+        telefono = validated_data.get('telefono', None)
+        foto = validated_data.get('foto', None)
+        Perfil.objects.create(user=user, telefono=telefono or None, foto=foto)
         return user
     def validate_email(self, value):
         email = value.strip().lower()
@@ -57,10 +61,11 @@ class PerfilCompletoSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name', required=False)
     last_name = serializers.CharField(source='user.last_name', required=False)
     email = serializers.EmailField(source='user.email', required=False)
+    date_joined = serializers.DateTimeField(source='user.date_joined', read_only=True)
 
     class Meta:
         model = Perfil
-        fields = ['telefono', 'direccion', 'foto', 'first_name', 'last_name', 'email']
+        fields = ['telefono', 'direccion', 'foto', 'first_name', 'last_name', 'email', 'date_joined']
     
 
 
