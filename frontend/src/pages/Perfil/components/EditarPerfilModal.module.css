@@ -1,0 +1,26 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,0.4);
+}
+
+.modal {
+  background: white;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  min-width: 320px;
+}
+
+.actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn {
+  background: #e5e7eb;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+}
