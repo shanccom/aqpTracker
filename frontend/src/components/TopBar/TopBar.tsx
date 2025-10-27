@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Receipt, User, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "../../components/auth";
 import Notifications from "../Notifications/Notifications";
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const Topbar = () => {
   const ubicacion = useLocation();
@@ -15,6 +15,20 @@ const Topbar = () => {
   const { user, openLogin, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const prevIsMobileRef = useRef<boolean>(window.innerWidth < 768);
+
+  // close mobile panel when crossing breakpoint to desktop
+  useEffect(() => {
+    function onResize() {
+      const isMobileNow = window.innerWidth < 768;
+      if (prevIsMobileRef.current && !isMobileNow && mobileOpen) {
+        setMobileOpen(false);
+      }
+      prevIsMobileRef.current = isMobileNow;
+    }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [mobileOpen]);
 
   return (
     <header className="w-full bg-white border-b border-gray-100">

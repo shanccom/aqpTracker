@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { getAccessToken, setAccessToken } from './tokenStore';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -73,6 +73,11 @@ api.interceptors.response.use(
         // clear tokens
         localStorage.removeItem('refresh');
         setAccessToken(null);
+        try {
+          window.dispatchEvent(new CustomEvent('auth:logged_out'));
+        } catch (e) {
+          // ignore in non-browser environments
+        }
         return Promise.reject(refreshErr);
       }
     }

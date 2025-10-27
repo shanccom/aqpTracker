@@ -19,10 +19,23 @@ class PerfilMinSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name', read_only=True)
     last_name = serializers.CharField(source='user.last_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
+    foto = serializers.SerializerMethodField()
 
     class Meta:
         model = Perfil
-        fields = ['id', 'email', 'first_name', 'last_name']
+        fields = ['id', 'email', 'first_name', 'last_name', 'foto']
+
+    def get_foto(self, obj):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        if obj.foto:
+            try:
+                return request.build_absolute_uri(obj.foto.url) if request else obj.foto.url
+            except Exception:
+                return obj.foto.url
+        # no foto set
+        from django.conf import settings
+        placeholder = (settings.STATIC_URL or '/') + 'img/profile.jpg'
+        return request.build_absolute_uri(placeholder) if request else placeholder
 
 
 class ComentarioSerializer(serializers.ModelSerializer):
@@ -79,11 +92,32 @@ class IncidenciaMinSerializer(serializers.ModelSerializer):
     """Compact incidencia representation for lists (used inside Reporte list)."""
     distrito = serializers.CharField(source='distrito.nombre', read_only=True)
     estado = serializers.CharField(source='estado.nombre', read_only=True)
-    imagen = serializers.ImageField(source='imagen', read_only=True)
+    imagen = serializers.SerializerMethodField()
+    comentarios_count = serializers.SerializerMethodField()
+    reacciones_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Incidencia
-        fields = ['id', 'titulo', 'imagen', 'distrito', 'estado', 'latitud', 'longitud']
+        fields = ['id', 'titulo', 'imagen', 'distrito', 'estado', 'latitud', 'longitud', 'comentarios_count', 'reacciones_count']
+
+    def get_comentarios_count(self, obj):
+        return obj.comentarios.count()
+
+    def get_reacciones_count(self, obj):
+        return obj.reacciones.count()
+
+    def get_imagen(self, obj):
+        # return absolute URL for image, or a default static placeholder
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        if obj.imagen:
+            try:
+                return request.build_absolute_uri(obj.imagen.url) if request else obj.imagen.url
+            except Exception:
+                return obj.imagen.url
+        # fallback to a static placeholder (ensure this file exists under STATICFILES)
+        from django.conf import settings
+        placeholder = (settings.STATIC_URL or '/') + 'img/incidencia.png'
+        return request.build_absolute_uri(placeholder) if request else placeholder
 
 
 class ReporteSerializer(serializers.ModelSerializer):
@@ -100,7 +134,9 @@ class ReporteSerializer(serializers.ModelSerializer):
 
 class NotificacionSerializer(serializers.ModelSerializer):
     usuario = PerfilMinSerializer(read_only=True)
+    actor = PerfilMinSerializer(read_only=True)
+    incidencia = IncidenciaMinSerializer(read_only=True)
 
     class Meta:
         model = Notificacion
-        fields = ['id', 'usuario', 'mensaje', 'incidencia', 'leida', 'fecha_creacion']
+        fields = ['id', 'usuario', 'actor', 'mensaje', 'incidencia', 'leida', 'fecha_creacion']

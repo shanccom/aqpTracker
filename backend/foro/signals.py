@@ -15,7 +15,7 @@ def comentario_post_save(sender, instance: Comentario, created, **kwargs):
         # no notificar si el autor es el mismo propietario
         if destinatario and autor and destinatario.pk != autor.pk:
             mensaje = f"{autor.user.first_name or autor.user.email} comentó tu incidencia: {incidencia.titulo}"
-            Notificacion.objects.create(usuario=destinatario, mensaje=mensaje, incidencia=incidencia)
+            Notificacion.objects.create(usuario=destinatario, mensaje=mensaje, incidencia=incidencia, actor=autor)
     except Exception:
         # defensivo: no romper la creación del comentario por fallos en notificación
         pass
@@ -43,6 +43,6 @@ def reaccion_post_save(sender, instance: Reaccion, created, **kwargs):
         if destinatario and autor and destinatario.pk != autor.pk:
             tipo_nombre = instance.tipo.nombre if instance.tipo else 'reaccion'
             mensaje = f"{autor.user.first_name or autor.user.email} reaccionó ({tipo_nombre}) a tu contenido"
-            Notificacion.objects.create(usuario=destinatario, mensaje=mensaje, incidencia=incidencia)
+            Notificacion.objects.create(usuario=destinatario, mensaje=mensaje, incidencia=incidencia, actor=autor)
     except Exception:
         pass

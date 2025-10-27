@@ -50,11 +50,24 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         // failed to restore session
         localStorage.removeItem('refresh');
         setAccessToken(null);
-        if (mounted) setUser(null);
+        if (mounted) {
+          setUser(null);
+          // open login modal to prompt user
+          setLoginOpen(true);
+        }
       }
     }
     restore();
-    return () => { mounted = false; };
+    // listen for global auth events (e.g., refresh failed in axios interceptor)
+    const onLoggedOut = () => {
+      setUser(null);
+      setLoginOpen(true);
+    };
+    window.addEventListener('auth:logged_out', onLoggedOut as EventListener);
+    return () => {
+      mounted = false;
+      window.removeEventListener('auth:logged_out', onLoggedOut as EventListener);
+    };
   }, []);
 
   async function login(creds: Credentials) {

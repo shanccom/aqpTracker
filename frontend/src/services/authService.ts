@@ -1,7 +1,5 @@
-import api from '../api/axios';
+import api, { API_BASE } from '../api/axios';
 import axios from 'axios';
-
-const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 export type Credentials = { email: string; password: string };
 export type ProfileShape = {
@@ -41,25 +39,32 @@ export async function logoutServer(refresh?: string) {
 }
 
 export async function getMyReports(page = 1, pageSize = 10) {
-  // call the foro 'reportes/me/' endpoint to get only the authenticated user's reportes
   const res = await api.get('/api/foro/reportes/me/', { params: { page, page_size: pageSize } });
-  return res.data as { count: number; next: string | null; previous: string | null; results: Array<{ id: number; nombre: string; tipo: string; fecha: string; estado?: string }> };
+  const data = res.data;
+  if (Array.isArray(data)) {
+    return { count: data.length, next: null, previous: null, results: data };
+  }
+  return data as { count: number; next: string | null; previous: string | null; results: Array<{ id: number; nombre: string; tipo: string; fecha: string; estado?: string }> };
 }
 
 export async function getNotifications(page = 1, pageSize = 10, unreadOnly = false) {
   const params: any = { page, page_size: pageSize };
   if (unreadOnly) params.leida = false;
-  const res = await api.get('/api/foro/notificacion/', { params });
-  return res.data as { count: number; next: string | null; previous: string | null; results: Array<any> };
+  const res = await api.get('/api/foro/notificaciones/', { params });
+  const data = res.data;
+  if (Array.isArray(data)) {
+    return { count: data.length, next: null, previous: null, results: data };
+  }
+  return data as { count: number; next: string | null; previous: string | null; results: Array<any> };
 }
 
 export async function markNotificationRead(id: number) {
-  const res = await api.patch(`/api/foro/notificacion/${id}/`, { leida: true });
+  const res = await api.patch(`/api/foro/notificaciones/${id}/`, { leida: true });
   return res.data;
 }
 
 export async function markAllNotificationsRead() {
-  const res = await api.post('/api/foro/notificacion/mark_all_read/');
+  const res = await api.post('/api/foro/notificaciones/mark_all_read/');
   return res.data as { marked: number };
 }
 

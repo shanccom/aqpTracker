@@ -81,6 +81,7 @@ class Reaccion(models.Model):
 
 class Notificacion(models.Model):
     usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE, related_name='notificaciones')
+    actor = models.ForeignKey(Perfil, on_delete=models.SET_NULL, null=True, blank=True, related_name='notificaciones_emitidas')
     mensaje = models.CharField(max_length=255)
     incidencia = models.ForeignKey(Incidencia, on_delete=models.CASCADE, null=True, blank=True)
     leida = models.BooleanField(default=False)

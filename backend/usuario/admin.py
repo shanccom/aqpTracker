@@ -24,4 +24,4 @@ admin.site.register(User, CustomUserAdmin)
 class PerfilAdmin(admin.ModelAdmin):
 	list_display = ('user', 'telefono', 'direccion')
 	search_fields = ('user__username', 'user__email', 'telefono', 'direccion')
-	raw_id_fields = ('user',)
+	autocomplete_fields = ('user',)

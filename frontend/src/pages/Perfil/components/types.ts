@@ -14,4 +14,7 @@ export interface Report {
   tipo: string; 
   fecha: string;
   estado?: string;
+  imagen?: string | null;
+  comentarios_count?: number;
+  reacciones_count?: number;
 }
