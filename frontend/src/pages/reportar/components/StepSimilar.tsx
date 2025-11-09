@@ -28,15 +28,19 @@ export default function StepSimilar({ data, onBack, onNext }: Props) {
         setSimilares(normalizeArray(data.similares))
         return
       }
-      if (!data.latlng) return
+      if (!data.latlng && !data.titulo && !data.distrito) return
       setLoading(true)
       try {
-        const res = await foroService.searchIncidencias({ 
-          lat: data.latlng.lat, 
-          lng: data.latlng.lng, 
-          radius: 0.5, 
-          q: data.titulo 
-        })
+        const params: any = {}
+        if (data.latlng) {
+          params.lat = data.latlng.lat
+          params.lng = data.latlng.lng
+          params.radius = 0.5
+        }
+        if (data.titulo) params.q = data.titulo
+        if (data.distrito) params.district = data.distrito
+
+        const res = await foroService.previewIncidencias(params)
         setSimilares(normalizeArray(res || []))
       } catch (err) {
         console.error(err)
@@ -112,7 +116,7 @@ export default function StepSimilar({ data, onBack, onNext }: Props) {
                       className="cursor-pointer hover:shadow-md transition-shadow duration-200 rounded-lg"
                       onClick={() => setSelected(s)}
                     >
-                      <PostCard post={s} />
+                      <PostCard post={s} onOpen={() => setSelected(s)} />
                     </div>
                   ))}
                 </div>

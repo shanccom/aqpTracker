@@ -6,7 +6,7 @@ from .models import Distrito, Estado, Incidencia, Reporte, TipoReaccion, Comenta
 from .serializers import (
     DistritoSerializer, EstadoSerializer, IncidenciaSerializer,
     ReporteSerializer, TipoReaccionSerializer, ComentarioSerializer,
-    ReaccionSerializer, NotificacionSerializer
+    ReaccionSerializer, NotificacionSerializer, IncidenciaMinSerializer
 )
 from django.shortcuts import get_object_or_404
 from difflib import SequenceMatcher
@@ -215,3 +215,83 @@ class NotificacionViewSet(viewsets.ModelViewSet):
 from django.shortcuts import render
 
 # Create your views here.
+
+
+from rest_framework.views import APIView
+
+
+class PreviewIncidenciasAPIView(APIView):
+    """Lightweight endpoint for frontend preview of incidencias.
+
+    Returns a compact list (using IncidenciaMinSerializer) filtered by:
+      - district_id
+      - estado (name or id)
+      - lat,lng,radius (km)
+      - from_date, to_date (YYYY-MM-DD or ISO)
+
+    This endpoint is intentionally separate from the main ViewSet to avoid
+    changing existing behavior.
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request, *args, **kwargs):
+        params = request.query_params
+        qs = Incidencia.objects.all().order_by('-fecha_creacion')
+
+        # district filter: accept either id (district_id) or name (district)
+        district_id = params.get('district_id')
+        district_name = params.get('district')
+        if district_id:
+            try:
+                qs = qs.filter(distrito_id=int(district_id))
+            except Exception:
+                pass
+        elif district_name:
+            qs = qs.filter(distrito__nombre__iexact=district_name)
+
+        # estado filter (id or name)
+        estado = params.get('estado')
+        if estado:
+            if estado.isdigit():
+                qs = qs.filter(estado_id=int(estado))
+            else:
+                qs = qs.filter(estado__nombre__iexact=estado)
+
+        # date range
+        from django.utils.dateparse import parse_date, parse_datetime
+        from datetime import datetime
+        from_date = params.get('from_date')
+        to_date = params.get('to_date')
+        try:
+            if from_date:
+                dt_from = parse_datetime(from_date) or (parse_date(from_date) and datetime.combine(parse_date(from_date), datetime.min.time()))
+                if dt_from:
+                    qs = qs.filter(fecha_creacion__gte=dt_from)
+            if to_date:
+                dt_to = parse_datetime(to_date) or (parse_date(to_date) and datetime.combine(parse_date(to_date), datetime.max.time()))
+                if dt_to:
+                    qs = qs.filter(fecha_creacion__lte=dt_to)
+        except Exception:
+            # ignore invalid date formats, frontend should validate
+            pass
+
+        # proximity filter (approximate, degrees)
+        lat = params.get('lat')
+        lng = params.get('lng')
+        if lat and lng:
+            try:
+                latf = float(lat); lngf = float(lng)
+                radius_km = float(params.get('radius', 0.5))
+                delta = radius_km / 111.0
+                qs = qs.filter(latitud__isnull=False, longitud__isnull=False,
+                               latitud__gte=latf - delta, latitud__lte=latf + delta,
+                               longitud__gte=lngf - delta, longitud__lte=lngf + delta)
+            except Exception:
+                pass
+
+        # limit results to protect the frontend
+        limit = 200
+        results = qs[:limit]
+
+        serializer = IncidenciaMinSerializer(results, many=True, context={'request': request})
+        return Response(serializer.data)

@@ -12,4 +12,9 @@ export async function createIncidencia(formData: FormData) {
   return res.data
 }
 
-export default { searchIncidencias, createIncidencia }
+export async function previewIncidencias(params: Record<string, any>) {
+  const res = await api.get('/api/foro/incidencias_preview/', { params })
+  return res.data || []
+}
+
+export default { searchIncidencias, createIncidencia, previewIncidencias }

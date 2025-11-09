@@ -31,6 +31,16 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
 
   if (!post) return null
 
+  const ubicacionText = typeof (post as any).ubicacion === 'object'
+    ? ((post as any).ubicacion?.nombre ?? String((post as any).ubicacion))
+    : (post.ubicacion || '')
+  const distritoText = typeof (post as any).distrito === 'object'
+    ? ((post as any).distrito?.nombre ?? String((post as any).distrito))
+    : (post.distrito || '')
+  const estadoText = typeof (post as any).estado === 'object'
+    ? ((post as any).estado?.nombre ?? String((post as any).estado))
+    : (post.estado || '')
+
   const addComment = (text: string) => {
     const next = [{ id: Date.now(), author: 'Tú', text, time: 'ahora', likes: 0 }, ...comments]
     setComments(next)
@@ -103,19 +113,17 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
         {/* Contenido principal */}
         <div className="p-6 overflow-auto">
           {/* Ubicación */}
-          {post.ubicacion && (
+          {ubicacionText && (
             <div className="flex items-center gap-2 text-gray-500 mb-3">
-              <span className="text-sm font-medium">{post.ubicacion}</span>
+              <span className="text-sm font-medium">{ubicacionText}</span>
             </div>
           )}
           {/* Distrito */}
-          {
-            post.distrito && (
-              <div className="flex items-center gap-2 text-gray-500 mb-3">
-                <span className="text-sm font-medium">Distrito: {post.distrito}</span>
-              </div>
-            )
-          }
+          {distritoText && (
+            <div className="flex items-center gap-2 text-gray-500 mb-3">
+              <span className="text-sm font-medium">Distrito: {distritoText}</span>
+            </div>
+          )}
 
           {/* Título y descripción */}
           <h1 className="text-2xl font-bold text-gray-900 mb-3">{post.titulo}</h1>
@@ -194,15 +202,15 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
               </div>
 
               {/* Estado */}
-              {post.estado && (
+              {estadoText && (
                 <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  post.estado === 'Activo' 
+                  estadoText === 'Activo' 
                     ? 'bg-orange-100 text-orange-700' 
-                    : post.estado === 'Resuelto'
+                    : estadoText === 'Resuelto'
                     ? 'bg-green-100 text-green-700'
                     : 'bg-gray-100 text-gray-700'
                 }`}>
-                  {post.estado}
+                  {estadoText}
                 </div>
               )}
             </div>
