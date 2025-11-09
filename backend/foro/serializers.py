@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Distrito, Estado, Incidencia, Reporte, TipoReaccion, Comentario, Reaccion, Notificacion
+from .models import Distrito, Estado, Incidencia, Reporte, TipoReaccion, Comentario, Reaccion, Notificacion, IncidenciaImagen
 from usuario.models import Perfil
 
 
@@ -78,14 +78,45 @@ class IncidenciaSerializer(serializers.ModelSerializer):
     estado = EstadoSerializer(read_only=True)
     comentarios = ComentarioSerializer(many=True, read_only=True)
     reacciones = ReaccionSerializer(many=True, read_only=True)
+    imagenes = serializers.SerializerMethodField()
+    reports_count = serializers.SerializerMethodField()
+    primer_reportero = serializers.SerializerMethodField()
 
     class Meta:
         model = Incidencia
         fields = [
-            'id', 'usuario', 'titulo', 'descripcion', 'imagen', 'distrito',
+            'id', 'usuario', 'titulo', 'descripcion', 'distrito',
             'latitud', 'longitud', 'estado', 'fecha_creacion', 'fecha_actualizacion',
-            'comentarios', 'reacciones'
+            'imagenes', 'reports_count', 'primer_reportero', 'comentarios', 'reacciones'
         ]
+
+    def get_imagenes(self, obj):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        imgs = []
+        for im in obj.imagenes.all():
+            try:
+                url = request.build_absolute_uri(im.imagen.url) if request else im.imagen.url
+            except Exception:
+                url = im.imagen.url
+            imgs.append({'id': im.id, 'url': url})
+        # fallback to legacy imagen field if no related images
+        legacy_imagen = getattr(obj, 'imagen', None)
+        if not imgs and legacy_imagen:
+            try:
+                url = request.build_absolute_uri(legacy_imagen.url) if request else legacy_imagen.url
+            except Exception:
+                url = legacy_imagen.url
+            imgs.append({'id': None, 'url': url})
+        return imgs
+
+    def get_reports_count(self, obj):
+        return obj.reporte_set.count()
+
+    def get_primer_reportero(self, obj):
+        first = obj.reporte_set.order_by('fecha_reporte').select_related('usuario').first()
+        if not first:
+            return None
+        return PerfilMinSerializer(first.usuario, context=self.context).data
 
 
 class IncidenciaMinSerializer(serializers.ModelSerializer):
@@ -93,12 +124,13 @@ class IncidenciaMinSerializer(serializers.ModelSerializer):
     distrito = serializers.CharField(source='distrito.nombre', read_only=True)
     estado = serializers.CharField(source='estado.nombre', read_only=True)
     imagen = serializers.SerializerMethodField()
+    reports_count = serializers.SerializerMethodField()
     comentarios_count = serializers.SerializerMethodField()
     reacciones_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Incidencia
-        fields = ['id', 'titulo', 'imagen', 'distrito', 'estado', 'latitud', 'longitud', 'comentarios_count', 'reacciones_count']
+        fields = ['id', 'titulo', 'imagen', 'distrito', 'estado', 'latitud', 'longitud', 'comentarios_count', 'reacciones_count', 'reports_count']
 
     def get_comentarios_count(self, obj):
         return obj.comentarios.count()
@@ -109,15 +141,41 @@ class IncidenciaMinSerializer(serializers.ModelSerializer):
     def get_imagen(self, obj):
         # return absolute URL for image, or a default static placeholder
         request = self.context.get('request') if hasattr(self, 'context') else None
-        if obj.imagen:
+        # prefer first related image
+        first = obj.imagenes.first() if hasattr(obj, 'imagenes') else None
+        if first:
             try:
-                return request.build_absolute_uri(obj.imagen.url) if request else obj.imagen.url
+                return request.build_absolute_uri(first.imagen.url) if request else first.imagen.url
             except Exception:
-                return obj.imagen.url
+                return first.imagen.url
+        legacy_imagen = getattr(obj, 'imagen', None)
+        if legacy_imagen:
+            try:
+                return request.build_absolute_uri(legacy_imagen.url) if request else legacy_imagen.url
+            except Exception:
+                return legacy_imagen.url
         # fallback to a static placeholder (ensure this file exists under STATICFILES)
         from django.conf import settings
         placeholder = (settings.STATIC_URL or '/') + 'img/incidencia.png'
         return request.build_absolute_uri(placeholder) if request else placeholder
+
+    def get_reports_count(self, obj):
+        return obj.reporte_set.count()
+
+
+class IncidenciaImagenSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IncidenciaImagen
+        fields = ['id', 'url']
+
+    def get_url(self, obj):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        try:
+            return request.build_absolute_uri(obj.imagen.url) if request else obj.imagen.url
+        except Exception:
+            return obj.imagen.url
 
 
 class ReporteSerializer(serializers.ModelSerializer):

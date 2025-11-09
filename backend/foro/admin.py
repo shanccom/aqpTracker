@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
 	Distrito, Estado, Incidencia, Reporte,
-	TipoReaccion, Comentario, Reaccion, Notificacion
+	TipoReaccion, Comentario, Reaccion, Notificacion, IncidenciaImagen
 )
 
 
@@ -24,6 +24,14 @@ class IncidenciaAdmin(admin.ModelAdmin):
 	list_filter = ('distrito', 'estado')
 	readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
 	autocomplete_fields = ('usuario',)
+
+
+class IncidenciaImagenInline(admin.TabularInline):
+    model = IncidenciaImagen
+    extra = 1
+
+# attach inline to Incidencia admin
+IncidenciaAdmin.inlines = [IncidenciaImagenInline]
 
 
 @admin.register(Reporte)

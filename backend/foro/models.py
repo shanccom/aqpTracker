@@ -20,7 +20,7 @@ class Incidencia(models.Model):
     usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE, related_name='incidencias') 
     titulo = models.CharField(max_length=120)
     descripcion = models.TextField()
-    imagen = models.ImageField(upload_to='incidencias/', blank=True, null=True)
+    #imagen = models.ImageField(upload_to='incidencias/', blank=True, null=True)
     distrito = models.ForeignKey(Distrito, on_delete=models.SET_NULL, null=True, blank=True)
     latitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -32,6 +32,18 @@ class Incidencia(models.Model):
 
     def __str__(self):
         return f"{self.titulo} ({self.usuario.user.email})"  # email como username
+
+
+class IncidenciaImagen(models.Model):
+    incidencia = models.ForeignKey(Incidencia, on_delete=models.CASCADE, related_name='imagenes')
+    imagen = models.ImageField(upload_to='incidencias/')
+    orden = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+
+    def __str__(self):
+        return f"Imagen {self.id} de {self.incidencia.titulo}"
 
 class Reporte(models.Model):
     usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE)
