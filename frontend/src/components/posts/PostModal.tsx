@@ -18,6 +18,7 @@ type Post = {
   reports_count?: number
   apoyos_count?: number
   imagenes?: Array<{ id: number; url: string }>
+  distrito?: string
 }
 
 const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComments?: any[] }> = ({ post, onClose, initialComments = [] }) => {
@@ -107,6 +108,14 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
               <span className="text-sm font-medium">{post.ubicacion}</span>
             </div>
           )}
+          {/* Distrito */}
+          {
+            post.distrito && (
+              <div className="flex items-center gap-2 text-gray-500 mb-3">
+                <span className="text-sm font-medium">Distrito: {post.distrito}</span>
+              </div>
+            )
+          }
 
           {/* Título y descripción */}
           <h1 className="text-2xl font-bold text-gray-900 mb-3">{post.titulo}</h1>
@@ -147,11 +156,11 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
                 <span className="text-sm font-medium">Me gusta</span>
               </button>
 
-              {/* Botón Apoyar */}
+              {/* Botón Apoyar (color del logo) */}
               <button 
                 onClick={handleSupport}
                 disabled={reported || loadingReport}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white border border-[#065f46] rounded-lg hover:bg-[#054f3f] hover:border-[#054f3f] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Users size={16} />
                 <span className="text-sm font-medium">

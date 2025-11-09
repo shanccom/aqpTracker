@@ -14,7 +14,8 @@ const datosDemo = [
     tiempo: 'hace 15 minutos',
     comentarios: 5,
     reacciones: 12,
-    estado: 'Activo'
+    estado: 'Activo',
+    distrito: 'Centro'
   },
   {
     id: 2,
@@ -28,7 +29,9 @@ const datosDemo = [
     tiempo: 'hace 45 minutos',
     comentarios: 18,
     reacciones: 34,
-    estado: 'Activo'
+    estado: 'Activo',
+    distrito: 'Centro'
+
   },
   {
     id: 3,
@@ -42,7 +45,8 @@ const datosDemo = [
     tiempo: 'hace 2 horas',
     comentarios: 1,
     reacciones: 8,
-    estado: 'Resuelto'
+    estado: 'Resuelto',
+    distrito: 'Centro'
   }
 ]
 

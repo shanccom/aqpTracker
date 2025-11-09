@@ -25,6 +25,12 @@ type Props = {
 }
 
 const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
+  const ubicacionText = typeof (post as any).ubicacion === 'object'
+    ? ((post as any).ubicacion?.nombre ?? String((post as any).ubicacion))
+    : (post.ubicacion || '')
+  const autorText = typeof (post as any).autor === 'object'
+    ? ((post as any).autor?.nombre || (post as any).autor?.first_name || String((post as any).autor))
+    : (post.autor || '')
   const handleApoyar = (e: React.MouseEvent) => {
     e.stopPropagation()
     onApoyar?.(post.id)
@@ -37,7 +43,7 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
 
   return (
     <article onClick={() => onOpen(post)} className="cursor-pointer">
-      <div className="flex flex-col items-stretch justify-start rounded-xl shadow-sm bg-white border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-200 hover:border-gray-200">
+      <div className="flex flex-col items-stretch justify-start rounded-xl shadow-sm bg-white border border-blue-50 overflow-hidden hover:shadow-md transition-all duration-200 hover:border-blue-100">
         {post.imagen && (
           <div 
             className="w-full bg-center bg-no-repeat aspect-[16/7] bg-cover bg-gray-50"
@@ -47,10 +53,12 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
         
         <div className="flex w-full grow flex-col items-stretch justify-center gap-4 p-6">
           {/* Header con ubicación */}
-          {post.ubicacion && (
-            <div className="flex items-center gap-2 text-gray-500">
-              <MapPin size={14} className="text-gray-400" />
-              <span className="text-sm font-medium">{post.ubicacion}</span>
+          {ubicacionText && (
+            <div className="flex items-center gap-2">
+              <div className="px-2 py-1 rounded-md bg-blue-50 text-blue-600 text-xs font-medium flex items-center gap-2">
+                <MapPin size={14} className="text-blue-600" />
+                <span className="leading-none">{ubicacionText}</span>
+              </div>
             </div>
           )}
 
@@ -71,7 +79,7 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">
-                por {post.autor || 'Usuario anónimo'} • {post.tiempo || 'hace poco'}
+                por {autorText || 'Usuario anónimo'} • {post.tiempo || 'hace poco'}
               </span>
             </div>
 
@@ -79,14 +87,17 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
             <div className="flex items-center justify-between">
               {post.primer_reportero && (
                 <div className="flex items-center gap-1.5">
-                  <img 
+                  <label htmlFor="">Distrito: {post.primer_reportero.first_name}</label>
+                  {/* <img 
                     src={post.primer_reportero.foto || '/static/img/profile.jpg'} 
                     alt="avatar" 
                     className="w-4 h-4 rounded-full object-cover"
-                  />
-                  <span className="text-xs text-gray-500">
+                  /> 
+                  */}
+                  {/* <span className="text-xs text-gray-500">
                     Reportado por {post.primer_reportero.first_name}
-                  </span>
+                  </span> 
+                  */}
                 </div>
               )}
               
@@ -101,20 +112,20 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
           {/* Footer con TODAS las interacciones */}
           <div className="flex items-center justify-between border-t border-gray-100 pt-4">
             {/* LADO IZQUIERDO - Acciones principales */}
-            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
               {/* Botón Like */}
               <button 
                 onClick={handleLike}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-50 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 hover:border-gray-300 transition-all duration-200"
+                className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg hover:bg-blue-100 hover:border-blue-200 transition-all duration-200"
               >
                 <ThumbsUp size={16} />
                 <span className="text-sm font-medium">Me gusta</span>
               </button>
 
-              {/* Botón Apoyar */}
+              {/* Botón Apoyar (color del logo) */}
               <button 
                 onClick={handleApoyar}
-                className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all duration-200"
+                className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white border border-[#065f46] rounded-lg hover:bg-[#054f3f] hover:border-[#054f3f] transition-all duration-200"
               >
                 <Users size={16} />
                 <span className="text-sm font-medium">Apoyar</span>
@@ -131,14 +142,14 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
             <div className="flex items-center gap-4">
               {/* Contadores de interacciones */}
               <div className="flex items-center gap-4 text-gray-500">
-                {post.reacciones > 0 && (
-                  <div className="flex items-center gap-1">
+                {(post.reacciones ?? 0) > 0 && (
+                  <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md text-blue-700">
                     <ThumbsUp size={14} />
                     <span className="text-sm">{post.reacciones}</span>
                   </div>
                 )}
-                {post.apoyos_count > 0 && (
-                  <div className="flex items-center gap-1">
+                {(post.apoyos_count ?? 0) > 0 && (
+                  <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md text-blue-700">
                     <Users size={14} />
                     <span className="text-sm">{post.apoyos_count}</span>
                   </div>
