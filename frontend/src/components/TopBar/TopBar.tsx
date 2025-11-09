@@ -156,17 +156,20 @@ const Topbar = () => {
           </div>
 
           <nav className="px-3 py-4 space-y-1">
-            {links.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 px-3 py-2 rounded-md text-base text-gray-800 hover:bg-gray-50"
-              >
-                <link.icon size={18} />
-                <span>{link.label}</span>
-              </Link>
-            ))}
+            {links.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-md text-base text-gray-800 hover:bg-gray-50"
+                >
+                  <Icon size={18} />
+                  <span>{link.label}</span>
+                </Link>
+              );
+            })}
           </nav>
 
           <div className="px-3 py-4 border-t">

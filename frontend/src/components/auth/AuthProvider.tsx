@@ -43,8 +43,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           const profile = await getProfile();
           if (mounted) {
             setUser(profile);
-            // navigate to profile after successful restore
-            navigate('/Perfil');
+            // do not auto-navigate after silent session restore — preserve user's current route
+            // navigate('/Perfil');
           }
       } catch (e) {
         // failed to restore session

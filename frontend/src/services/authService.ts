@@ -78,3 +78,20 @@ export async function updateProfile(data: FormData) {
   const res = await api.patch('/api/usuario/perfil/', data, { headers: { 'Content-Type': 'multipart/form-data' } });
   return res.data as ProfileShape;
 }
+
+// Foro-related helpers
+export async function getMyAuthoredIncidencias(page = 1, pageSize = 20) {
+  const res = await api.get('/api/foro/incidencias/mine/', { params: { page, page_size: pageSize } });
+  const data = res.data;
+  if (Array.isArray(data)) return { count: data.length, next: null, previous: null, results: data };
+  return data as { count: number; next: string | null; previous: string | null; results: any[] };
+}
+
+export async function getMySupportedIncidencias(page = 1, pageSize = 50) {
+  // returns the mapped incidencias from the user's reportes
+  const res = await api.get('/api/foro/reportes/me/', { params: { page, page_size: pageSize } });
+  const data = res.data;
+  const list = Array.isArray(data) ? data : (data.results ?? data);
+  const incidencias = (list || []).map((r: any) => r.incidencia).filter(Boolean);
+  return { count: incidencias.length, next: null, previous: null, results: incidencias } as { count: number; next: string | null; previous: string | null; results: any[] };
+}
