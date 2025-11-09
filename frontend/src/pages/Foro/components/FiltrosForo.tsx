@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react'
-import { ChevronDown, MapPin, Filter, X, Search, Calendar } from 'lucide-react'
+import React, { useState } from 'react'
+import { ChevronDown, MapPin, Filter, X, Calendar } from 'lucide-react'
 import MapPicker from '../../../components/MapPicker/MapPicker'
 
 type Filters = {
   distrito?: string
   estado?: string
-  q?: string
   from_date?: string
   to_date?: string
   lat?: number
@@ -18,7 +17,6 @@ const AREQUIPA_CENTER = { lat: -16.409047, lng: -71.537451 }
 const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }) => {
   const [distrito, setDistrito] = useState<string | undefined>(undefined)
   const [estado, setEstado] = useState<string | undefined>(undefined)
-  const [q, setQ] = useState<string | undefined>(undefined)
   const [fromDate, setFromDate] = useState<string | undefined>(undefined)
   const [toDate, setToDate] = useState<string | undefined>(undefined)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
@@ -26,20 +24,7 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
   const [showMapModal, setShowMapModal] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
 
-  useEffect(() => {
-    const f: Filters = {}
-    if (distrito) f.distrito = distrito
-    if (estado) f.estado = estado
-    if (q) f.q = q
-    if (fromDate) f.from_date = fromDate
-    if (toDate) f.to_date = toDate
-    if (coords) {
-      f.lat = coords.lat
-      f.lng = coords.lng
-      f.radius_km = radiusKm
-    }
-    onChange?.(f)
-  }, [distrito, estado, q, fromDate, toDate, coords, radiusKm, onChange])
+  // Filters are emitted explicitly when the user clicks "Buscar" or when clearing filters.
 
   const handleOpenMap = () => {
     if (!('geolocation' in navigator)) {
@@ -63,14 +48,15 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
   const clearFilters = () => {
     setDistrito(undefined)
     setEstado(undefined)
-    setQ(undefined)
     setFromDate(undefined)
     setToDate(undefined)
     setCoords(null)
     setRadiusKm(5)
+    // emit cleared filters to parent if any
+    onChange?.({})
   }
 
-  const hasActiveFilters = distrito || estado || q || fromDate || toDate || coords
+  const hasActiveFilters = Boolean(distrito || estado || fromDate || toDate || coords)
 
   return (
     <>
@@ -90,23 +76,7 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
         {/* Contenido de filtros */}
         <div className={`${showFilters ? 'block' : 'hidden'} md:block`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Búsqueda por texto */}
-            <div className="lg:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Buscar incidentes
-              </label>
-              <div className="relative">
-                <input
-                  placeholder="Buscar por título o descripción..."
-                  value={q || ''}
-                  onChange={(e) => setQ(e.target.value || undefined)}
-                  className="w-full bg-white border border-gray-300 py-3 pl-10 pr-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 shadow-sm"
-                />
-                <div className="absolute left-3 top-3 text-gray-400">
-                  <Search size={18} />
-                </div>
-              </div>
-            </div>
+            {/* (Se eliminó la búsqueda por texto: ahora se usa el botón Buscar para emitir filtros) */}
 
             {/* Distrito */}
             <div>
@@ -231,6 +201,25 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
             </div>
             
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  const f: Filters = {}
+                  if (distrito) f.distrito = distrito
+                  if (estado) f.estado = estado
+                  if (fromDate) f.from_date = fromDate
+                  if (toDate) f.to_date = toDate
+                  if (coords) {
+                    f.lat = coords.lat
+                    f.lng = coords.lng
+                    f.radius_km = radiusKm
+                  }
+                  onChange?.(f)
+                }}
+                className="px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-sm hover:bg-emerald-600 transition-colors font-medium"
+              >
+                Buscar
+              </button>
+
               {hasActiveFilters && (
                 <button 
                   onClick={clearFilters}

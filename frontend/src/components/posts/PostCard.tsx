@@ -1,10 +1,13 @@
 import React from 'react'
 import { MapPin, ThumbsUp, MessageCircle, Users } from 'lucide-react'
+import { timeAgo, formatDateShort } from '../../utils/date'
 
 type Post = {
   id: number
   titulo: string
   ubicacion?: string
+  direccion?: string | null
+  distrito?: string | null
   descripcion?: string
   imagen?: string | null
   autor?: string
@@ -28,6 +31,8 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
   const ubicacionText = typeof (post as any).ubicacion === 'object'
     ? ((post as any).ubicacion?.nombre ?? String((post as any).ubicacion))
     : (post.ubicacion || '')
+  const direccionText = post.direccion || ''
+  const distritoText = post.distrito || ''
   const autorText = typeof (post as any).autor === 'object'
     ? ((post as any).autor?.nombre || (post as any).autor?.first_name || String((post as any).autor))
     : (post.autor || '')
@@ -53,14 +58,22 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
         
         <div className="flex w-full grow flex-col items-stretch justify-center gap-4 p-6">
           {/* Header con ubicación */}
-          {ubicacionText && (
+          {/* Mostrar dirección si existe, luego distrito */}
+          {direccionText ? (
+            <div className="flex items-center gap-2">
+              <div className="px-2 py-1 rounded-md bg-blue-50 text-blue-600 text-xs font-medium flex items-center gap-2">
+                <MapPin size={14} className="text-blue-600" />
+                <span className="leading-none">{direccionText}</span>
+              </div>
+            </div>
+          ) : ubicacionText ? (
             <div className="flex items-center gap-2">
               <div className="px-2 py-1 rounded-md bg-blue-50 text-blue-600 text-xs font-medium flex items-center gap-2">
                 <MapPin size={14} className="text-blue-600" />
                 <span className="leading-none">{ubicacionText}</span>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Contenido principal */}
           <div className="space-y-3">
@@ -79,7 +92,13 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">
-                por {autorText || 'Usuario anónimo'} • {post.tiempo || 'hace poco'}
+                por {autorText || 'Usuario anónimo'} • {post.tiempo ? timeAgo(post.tiempo) : 'hace poco'}
+                {post.tiempo && (
+                  <span className="ml-2 text-xs text-gray-400">· {formatDateShort(post.tiempo)}</span>
+                )}
+                {distritoText && (
+                  <span className="ml-2 text-xs text-gray-400">· Distrito: {distritoText}</span>
+                )}
               </span>
             </div>
 

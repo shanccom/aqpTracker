@@ -86,6 +86,7 @@ class IncidenciaSerializer(serializers.ModelSerializer):
         model = Incidencia
         fields = [
             'id', 'usuario', 'titulo', 'descripcion', 'distrito',
+            'direccion',
             'latitud', 'longitud', 'estado', 'fecha_creacion', 'fecha_actualizacion',
             'imagenes', 'reports_count', 'primer_reportero', 'comentarios', 'reacciones'
         ]
@@ -121,6 +122,10 @@ class IncidenciaSerializer(serializers.ModelSerializer):
 
 class IncidenciaMinSerializer(serializers.ModelSerializer):
     """Compact incidencia representation for lists (used inside Reporte list)."""
+    # include a minimal usuario representation so the frontend can show the owner
+    usuario = PerfilMinSerializer(read_only=True)
+    fecha_creacion = serializers.DateTimeField(read_only=True)
+    descripcion = serializers.SerializerMethodField()
     distrito = serializers.CharField(source='distrito.nombre', read_only=True)
     estado = serializers.CharField(source='estado.nombre', read_only=True)
     imagen = serializers.SerializerMethodField()
@@ -130,7 +135,11 @@ class IncidenciaMinSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Incidencia
-        fields = ['id', 'titulo', 'imagen', 'distrito', 'estado', 'latitud', 'longitud', 'comentarios_count', 'reacciones_count', 'reports_count']
+        fields = [
+            'id', 'titulo', 'imagen', 'descripcion', 'usuario', 'fecha_creacion',
+            'distrito', 'estado', 'direccion', 'latitud', 'longitud', 'comentarios_count',
+            'reacciones_count', 'reports_count'
+        ]
 
     def get_comentarios_count(self, obj):
         return obj.comentarios.count()
@@ -158,6 +167,11 @@ class IncidenciaMinSerializer(serializers.ModelSerializer):
         from django.conf import settings
         placeholder = (settings.STATIC_URL or '/') + 'img/incidencia.png'
         return request.build_absolute_uri(placeholder) if request else placeholder
+
+    def get_descripcion(self, obj):
+        # provide a short preview for list views (truncate to avoid large payloads)
+        txt = (obj.descripcion or '')
+        return txt if len(txt) <= 300 else txt[:297] + '...'
 
     def get_reports_count(self, obj):
         return obj.reporte_set.count()

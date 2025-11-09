@@ -14,7 +14,45 @@ export async function createIncidencia(formData: FormData) {
 
 export async function previewIncidencias(params: Record<string, any>) {
   const res = await api.get('/api/foro/incidencias_preview/', { params })
-  return res.data || []
+  const data = res.data || []
+
+  // normalize to the Post shape expected by PostCard / PostsList
+  const normalize = (item: any) => {
+    // estado from backend may be lowercase or different language; try to normalize simple cases
+    const estadoRaw = item.estado || ''
+    const estado = typeof estadoRaw === 'string'
+      ? (estadoRaw.charAt(0).toUpperCase() + estadoRaw.slice(1))
+      : estadoRaw
+
+    // prefer direccion textual when available, otherwise use distrito
+    const direccionText = item.direccion || null
+    const ubicacionValue = direccionText || item.distrito || undefined
+
+    return {
+      id: item.id,
+      titulo: item.titulo,
+      imagen: item.imagen || null,
+      ubicacion: ubicacionValue,
+      direccion: direccionText,
+      distrito: item.distrito || null,
+      descripcion: item.descripcion || undefined,
+      autor: item.usuario || undefined,
+      tiempo: item.fecha_creacion || undefined,
+      comentarios: item.comentarios_count ?? item.comentarios ?? 0,
+      reacciones: item.reacciones_count ?? item.reacciones ?? 0,
+      estado: estado || undefined,
+      reports_count: item.reports_count ?? 0,
+      primer_reportero: item.primer_reportero ?? null,
+      apoyos_count: item.apoyos_count ?? undefined,
+      latitud: item.latitud !== undefined ? (item.latitud ? Number(item.latitud) : null) : null,
+      longitud: item.longitud !== undefined ? (item.longitud ? Number(item.longitud) : null) : null,
+    }
+  }
+
+  if (Array.isArray(data)) return data.map(normalize)
+  // if paginated
+  if (Array.isArray(data.results)) return data.results.map(normalize)
+  return []
 }
 
 export default { searchIncidencias, createIncidencia, previewIncidencias }

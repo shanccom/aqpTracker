@@ -20,6 +20,8 @@ class Incidencia(models.Model):
     usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE, related_name='incidencias') 
     titulo = models.CharField(max_length=120)
     descripcion = models.TextField()
+    # dirección textual opcional (ej: "Calle X #123")
+    direccion = models.CharField(max_length=255, blank=True, null=True)
     #imagen = models.ImageField(upload_to='incidencias/', blank=True, null=True)
     distrito = models.ForeignKey(Distrito, on_delete=models.SET_NULL, null=True, blank=True)
     latitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)

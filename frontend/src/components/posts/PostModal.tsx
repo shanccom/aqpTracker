@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { X, Users, ThumbsUp, MessageCircle } from 'lucide-react'
+import { timeAgo, formatDateTime } from '../../utils/date'
 import CommentsList from './CommentsList'
 import NewCommentBox from './NewCommentBox'
 import api from '../../api/axios'
@@ -19,6 +20,7 @@ type Post = {
   apoyos_count?: number
   imagenes?: Array<{ id: number; url: string }>
   distrito?: string
+  direccion?: string | null
 }
 
 const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComments?: any[] }> = ({ post, onClose, initialComments = [] }) => {
@@ -31,12 +33,8 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
 
   if (!post) return null
 
-  const ubicacionText = typeof (post as any).ubicacion === 'object'
-    ? ((post as any).ubicacion?.nombre ?? String((post as any).ubicacion))
-    : (post.ubicacion || '')
-  const distritoText = typeof (post as any).distrito === 'object'
-    ? ((post as any).distrito?.nombre ?? String((post as any).distrito))
-    : (post.distrito || '')
+  const distritoText = post.distrito || ''
+  const direccionText = post.direccion || ''
   const estadoText = typeof (post as any).estado === 'object'
     ? ((post as any).estado?.nombre ?? String((post as any).estado))
     : (post.estado || '')
@@ -95,13 +93,13 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
       <div className="relative z-10 w-full max-w-4xl bg-white rounded-xl overflow-auto shadow-2xl h-[90vh] border border-gray-100">
         {/* Header */}
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
               <img src="/static/img/profile.jpg" alt="avatar" className="w-full h-full object-cover" />
             </div>
             <div>
               <p className="font-semibold text-gray-900">{post.autor || 'Usuario anónimo'}</p>
-              <p className="text-sm text-gray-500">{post.tiempo || 'hace poco'}</p>
+              <p className="text-sm text-gray-500">{post.tiempo ? `${timeAgo(post.tiempo)} · ${formatDateTime(post.tiempo)}` : 'hace poco'}</p>
             </div>
           </div>
           
@@ -113,12 +111,13 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
         {/* Contenido principal */}
         <div className="p-6 overflow-auto">
           {/* Ubicación */}
-          {ubicacionText && (
+          {/* Dirección textual (si existe) */}
+          {direccionText && (
             <div className="flex items-center gap-2 text-gray-500 mb-3">
-              <span className="text-sm font-medium">{ubicacionText}</span>
+              <span className="text-sm font-medium">Dirección: {direccionText}</span>
             </div>
           )}
-          {/* Distrito */}
+          {/* Ubicación / Distrito */}
           {distritoText && (
             <div className="flex items-center gap-2 text-gray-500 mb-3">
               <span className="text-sm font-medium">Distrito: {distritoText}</span>
