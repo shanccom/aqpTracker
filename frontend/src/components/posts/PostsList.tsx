@@ -21,7 +21,7 @@ const PostsList: React.FC<{ posts: Post[] }> = ({ posts }) => {
   const open = (p: Post) => setSelected(p)
   const close = () => setSelected(null)
 
-  // demo comments per post (could be fetched by id)
+  // demo comments per post
   const demoComments = [
     { id: 1, author: 'Juan Pérez', avatar: '/static/img/profile.jpg', text: 'Justo pasé por ahí, confirmo que está bloqueando el carril derecho.', time: 'hace 10 minutos', likes: 15 },
     { id: 2, author: 'Ana García', avatar: '/static/img/profile.jpg', text: '@Juan Pérez gracias por la info!', time: 'hace 2 minutos', likes: 2 },

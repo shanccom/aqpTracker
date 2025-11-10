@@ -27,7 +27,6 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
   const [distritosList, setDistritosList] = useState<Array<any>>([])
   const [estadosList, setEstadosList] = useState<Array<any>>([])
 
-  // Filters are emitted explicitly when the user clicks "Buscar" or when clearing filters.
 
   const handleOpenMap = () => {
     if (!('geolocation' in navigator)) {
@@ -84,7 +83,7 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
 
   return (
     <>
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6 w-full">
         {/* Header móvil */}
         <div className="md:hidden flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Filtros</h3>
@@ -214,7 +213,7 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
               {/* Coordenadas actuales */}
               {coords && (
                 <div className="mt-2 text-sm text-emerald-600 font-medium">
-                  📍 Lat: {coords.lat.toFixed(4)}, Lng: {coords.lng.toFixed(4)}
+                  Lat: {coords.lat.toFixed(4)}, Lng: {coords.lng.toFixed(4)}
                 </div>
               )}
             </div>

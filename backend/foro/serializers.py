@@ -163,10 +163,8 @@ class IncidenciaMinSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(legacy_imagen.url) if request else legacy_imagen.url
             except Exception:
                 return legacy_imagen.url
-        # fallback to a static placeholder (ensure this file exists under STATICFILES)
-        from django.conf import settings
-        placeholder = (settings.STATIC_URL or '/') + 'img/incidencia.png'
-        return request.build_absolute_uri(placeholder) if request else placeholder
+        # no image available -> return None so frontend can skip rendering
+        return None
 
     def get_descripcion(self, obj):
         # provide a short preview for list views (truncate to avoid large payloads)

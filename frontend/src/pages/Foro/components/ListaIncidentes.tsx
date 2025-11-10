@@ -2,7 +2,6 @@ import React from 'react'
 import PostsList from '../../../components/posts/PostsList'
 
 const ListaIncidentes: React.FC<{ posts?: any[]; loading?: boolean; error?: string | null }> = ({ posts = [], loading = false, error = null }) => {
-  // when no posts provided, show placeholder demo or empty state
   if (loading) {
     return <div className="py-12 text-center">Cargando incidentes...</div>
   }

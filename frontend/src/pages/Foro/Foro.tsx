@@ -25,7 +25,6 @@ const ForoView: React.FC = () => {
     }
   }
 
-  // initial load: fetch all (preview) incidencias when component mounts
   useEffect(() => {
     let mounted = true
     const load = async () => {
