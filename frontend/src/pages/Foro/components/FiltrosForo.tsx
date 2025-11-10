@@ -1,28 +1,31 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import api from '../../../api/axios'
 import { ChevronDown, MapPin, Filter, X, Calendar } from 'lucide-react'
 import MapPicker from '../../../components/MapPicker/MapPicker'
 
 type Filters = {
-  distrito?: string
-  estado?: string
+  district_id?: number
+  estado?: string | number
   from_date?: string
   to_date?: string
   lat?: number
   lng?: number
-  radius_km?: number
+  radius?: number
 }
 
 const AREQUIPA_CENTER = { lat: -16.409047, lng: -71.537451 }
 
 const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }) => {
-  const [distrito, setDistrito] = useState<string | undefined>(undefined)
-  const [estado, setEstado] = useState<string | undefined>(undefined)
+  const [distritoId, setDistritoId] = useState<number | undefined>(undefined)
+  const [estado, setEstado] = useState<string | number | undefined>(undefined)
   const [fromDate, setFromDate] = useState<string | undefined>(undefined)
   const [toDate, setToDate] = useState<string | undefined>(undefined)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [radiusKm, setRadiusKm] = useState<number>(5)
   const [showMapModal, setShowMapModal] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [distritosList, setDistritosList] = useState<Array<any>>([])
+  const [estadosList, setEstadosList] = useState<Array<any>>([])
 
   // Filters are emitted explicitly when the user clicks "Buscar" or when clearing filters.
 
@@ -46,7 +49,7 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
   }
 
   const clearFilters = () => {
-    setDistrito(undefined)
+    setDistritoId(undefined)
     setEstado(undefined)
     setFromDate(undefined)
     setToDate(undefined)
@@ -56,7 +59,28 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
     onChange?.({})
   }
 
-  const hasActiveFilters = Boolean(distrito || estado || fromDate || toDate || coords)
+  const hasActiveFilters = Boolean(distritoId || estado || fromDate || toDate || coords)
+
+  useEffect(() => {
+    let mounted = true
+    const loadMeta = async () => {
+      try {
+        const [dRes, eRes] = await Promise.all([
+          api.get('/api/foro/distritos/'),
+          api.get('/api/foro/estados/')
+        ])
+        if (!mounted) return
+        setDistritosList(dRes.data || [])
+        setEstadosList(eRes.data || [])
+      } catch (err) {
+        console.error('Error cargando distritos/estados', err)
+      } finally {
+        // finished
+      }
+    }
+    loadMeta()
+    return () => { mounted = false }
+  }, [])
 
   return (
     <>
@@ -85,16 +109,14 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
               </label>
               <div className="relative">
                 <select
-                  value={distrito || ''}
-                  onChange={(e) => setDistrito(e.target.value || undefined)}
+                  value={distritoId ?? ''}
+                  onChange={(e) => setDistritoId(e.target.value ? Number(e.target.value) : undefined)}
                   className="appearance-none w-full bg-white border border-gray-300 text-gray-700 py-3 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 shadow-sm"
                 >
                   <option value="">Todos los distritos</option>
-                  <option value="Centro">Centro</option>
-                  <option value="Norte">Norte</option>
-                  <option value="Sur">Sur</option>
-                  <option value="Este">Este</option>
-                  <option value="Oeste">Oeste</option>
+                  {distritosList.map(d => (
+                    <option key={d.id} value={d.id}>{d.nombre}</option>
+                  ))}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
                   <ChevronDown size={18} />
@@ -110,13 +132,21 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
               <div className="relative">
                 <select
                   value={estado || ''}
-                  onChange={(e) => setEstado(e.target.value || undefined)}
+                  onChange={(e) => setEstado(e.target.value ? Number(e.target.value) : undefined)}
                   className="appearance-none w-full bg-white border border-gray-300 text-gray-700 py-3 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 shadow-sm"
                 >
                   <option value="">Todos los estados</option>
-                  <option value="Activo">Activo</option>
-                  <option value="Resuelto">Resuelto</option>
-                  <option value="Investigación">Investigación</option>
+                  {estadosList.length > 0 ? (
+                    estadosList.map((e: any) => (
+                      <option key={e.id} value={e.id}>{e.nombre}</option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Activo">Activo</option>
+                      <option value="Resuelto">Resuelto</option>
+                      <option value="Investigación">Investigación</option>
+                    </>
+                  )}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
                   <ChevronDown size={18} />
@@ -203,15 +233,17 @@ const FiltrosForo: React.FC<{ onChange?: (f: Filters) => void }> = ({ onChange }
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
-                  const f: Filters = {}
-                  if (distrito) f.distrito = distrito
+                  // map frontend filter names to backend params expected by /incidencias_preview/
+                  const f: any = {}
+                  if (distritoId) f.district_id = distritoId
                   if (estado) f.estado = estado
                   if (fromDate) f.from_date = fromDate
                   if (toDate) f.to_date = toDate
                   if (coords) {
                     f.lat = coords.lat
                     f.lng = coords.lng
-                    f.radius_km = radiusKm
+                    // backend expects 'radius' in kilometers
+                    f.radius = radiusKm
                   }
                   onChange?.(f)
                 }}
