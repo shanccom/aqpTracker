@@ -69,13 +69,6 @@ const Rutas: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="bg-blue-600 p-3 rounded-lg">
-                <Bus className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">AQP Tracker</h1>
-                <p className="text-gray-600">Sistema de Rutas de Arequipa</p>
-              </div>
             </div>
             {vistaActual === 'detalle' && (
               <button
