@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import PostCard from './PostCard'
 import PostModal from './PostModal'
 
@@ -15,11 +15,18 @@ type Post = {
   estado?: string
 }
 
-const PostsList: React.FC<{ posts: Post[] }> = ({ posts }) => {
+const PostsList: React.FC<{ posts: Post[]; onLike?: (id: number) => void; onApoyar?: (id: number) => void }> = ({ posts, onLike, onApoyar }) => {
   const [selected, setSelected] = useState<Post | null>(null)
 
   const open = (p: Post) => setSelected(p)
   const close = () => setSelected(null)
+
+  // keep selected in sync when posts array updates (e.g., like/apoyar changed counts)
+  useEffect(() => {
+    if (!selected) return
+    const updated = posts.find(x => x.id === selected.id)
+    if (updated) setSelected(updated)
+  }, [posts])
 
   // demo comments per post
   const demoComments = [
@@ -31,11 +38,11 @@ const PostsList: React.FC<{ posts: Post[] }> = ({ posts }) => {
   return (
     <div className="flex flex-col w-full gap-6">
       {posts.map(p => (
-        <PostCard key={p.id} post={p} onOpen={open} />
+        <PostCard key={p.id} post={p} onOpen={open} onLike={onLike} onApoyar={onApoyar} />
       ))}
 
       {selected && (
-        <PostModal post={selected} onClose={close} initialComments={demoComments} />
+        <PostModal post={selected} onClose={close} initialComments={demoComments} onLike={onLike} onApoyar={onApoyar} />
       )}
     </div>
   )

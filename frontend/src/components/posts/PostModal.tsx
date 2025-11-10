@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { X, Users, ThumbsUp, MessageCircle } from 'lucide-react'
+import ConfirmModal from '../ui/ConfirmModal'
 import { timeAgo, formatDateTime } from '../../utils/date'
 import CommentsList from './CommentsList'
 import NewCommentBox from './NewCommentBox'
@@ -23,13 +24,11 @@ type Post = {
   direccion?: string | null
 }
 
-const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComments?: any[] }> = ({ post, onClose, initialComments = [] }) => {
+const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComments?: any[], onLike?: (id: number) => void, onApoyar?: (id: number) => void }> = ({ post, onClose, initialComments = [], onLike, onApoyar }) => {
   const [comments, setComments] = useState(initialComments)
   const [reported, setReported] = useState<boolean>(false)
   const [reportsCountState, setReportsCountState] = useState<number>(post?.reports_count ?? 0)
   const [loadingReport, setLoadingReport] = useState(false)
-  const [liked, setLiked] = useState<boolean>(false)
-  const [likesCount, setLikesCount] = useState<number>(post?.reacciones ?? 0)
 
   if (!post) return null
 
@@ -38,6 +37,9 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
   const estadoText = typeof (post as any).estado === 'object'
     ? ((post as any).estado?.nombre ?? String((post as any).estado))
     : (post.estado || '')
+  const autorText = typeof (post as any).autor === 'object'
+    ? ((post as any).autor?.nombre || (post as any).autor?.first_name || String((post as any).autor))
+    : (post.autor || '')
 
   const addComment = (text: string) => {
     const next = [{ id: Date.now(), author: 'Tú', text, time: 'ahora', likes: 0 }, ...comments]
@@ -65,7 +67,12 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
     if (reported) return
     setLoadingReport(true)
     try {
-      await api.post('/api/foro/reportes/', { incidencia_id: post.id })
+      // confirmation handled by modal UI
+      if (onApoyar) {
+        await onApoyar(post.id)
+      } else {
+        await api.post('/api/foro/reportes/', { incidencia_id: post.id })
+      }
       setReported(true)
       setReportsCountState(c => (c || 0) + 1)
     } catch (err: any) {
@@ -83,8 +90,30 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
   }
 
   const handleLike = () => {
-    setLiked(!liked)
-    setLikesCount(prev => liked ? prev - 1 : prev + 1)
+    if (onLike) {
+      try {
+        onLike(post.id)
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+
+  // keep reportsCountState in sync if post prop changes
+  useEffect(() => {
+    setReportsCountState(post?.reports_count ?? 0)
+  }, [post?.reports_count])
+
+  // if parent marks post as reported_by_me, update local reported flag too
+  useEffect(() => {
+    if ((post as any).reported_by_me) setReported(true)
+  }, [post?.reported_by_me])
+
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  const doConfirmSupport = async () => {
+    setShowConfirm(false)
+    await handleSupport()
   }
 
   return (
@@ -98,7 +127,7 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
               <img src="/static/img/profile.jpg" alt="avatar" className="w-full h-full object-cover" />
             </div>
             <div>
-              <p className="font-semibold text-gray-900">{post.autor || 'Usuario anónimo'}</p>
+              <p className="font-semibold text-gray-900">{autorText || 'Usuario anónimo'}</p>
               <p className="text-sm text-gray-500">{post.tiempo ? `${timeAgo(post.tiempo)} · ${formatDateTime(post.tiempo)}` : 'hace poco'}</p>
             </div>
           </div>
@@ -159,13 +188,13 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
                 onClick={handleLike}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 hover:border-gray-300 transition-all duration-200"
               >
-                <ThumbsUp size={16} className={liked ? "text-blue-500" : ""} />
+                <ThumbsUp size={16} />
                 <span className="text-sm font-medium">Me gusta</span>
               </button>
 
               {/* Botón Apoyar (color del logo) */}
               <button 
-                onClick={handleSupport}
+                onClick={() => setShowConfirm(true)}
                 disabled={reported || loadingReport}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white border border-[#065f46] rounded-lg hover:bg-[#054f3f] hover:border-[#054f3f] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -186,10 +215,10 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
             <div className="flex items-center gap-4">
               {/* Contadores de interacciones */}
               <div className="flex items-center gap-4 text-gray-500">
-                {likesCount > 0 && (
+                {(post.reacciones ?? 0) > 0 && (
                   <div className="flex items-center gap-1">
                     <ThumbsUp size={14} />
-                    <span className="text-sm">{likesCount}</span>
+                    <span className="text-sm">{post.reacciones}</span>
                   </div>
                 )}
                 {reportsCountState > 0 && (
@@ -225,6 +254,13 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
             <NewCommentBox onAdd={addComment} />
           </div>
         </div>
+        <ConfirmModal
+          open={showConfirm}
+          title="Confirmar apoyo"
+          message="Si confirmas, estarás indicando que este incidente existe ante la comunidad. ¿Deseas continuar?"
+          onConfirm={doConfirmSupport}
+          onCancel={() => setShowConfirm(false)}
+        />
       </div>
     </div>
   )

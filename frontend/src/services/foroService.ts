@@ -55,4 +55,33 @@ export async function previewIncidencias(params: Record<string, any>) {
   return []
 }
 
-export default { searchIncidencias, createIncidencia, previewIncidencias }
+export async function listTipoReacciones() {
+  const res = await api.get('/api/foro/tiporeacciones/')
+  return res.data || []
+}
+
+export async function createReaccion(incidenciaId: number, tipoId: number) {
+  const payload = { incidencia: incidenciaId, tipo: tipoId }
+  const res = await api.post('/api/foro/reacciones/', payload)
+  return res.data
+}
+
+export async function listReacciones(params: Record<string, any>) {
+  const res = await api.get('/api/foro/reacciones/', { params })
+  const data = res.data
+  if (Array.isArray(data)) return data
+  return data.results ?? []
+}
+
+export async function deleteReaccion(id: number) {
+  const res = await api.delete(`/api/foro/reacciones/${id}/`)
+  return res.data
+}
+
+export async function createReporte(incidenciaId: number) {
+  const payload = { incidencia_id: incidenciaId }
+  const res = await api.post('/api/foro/reportes/', payload)
+  return res.data
+}
+
+export default { searchIncidencias, createIncidencia, previewIncidencias, listTipoReacciones, createReaccion, listReacciones, deleteReaccion, createReporte }

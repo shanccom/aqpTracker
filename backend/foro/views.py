@@ -165,7 +165,14 @@ class ReporteViewSet(viewsets.ModelViewSet):
         if not perfil:
             from usuario.models import Perfil as PerfilModel
             perfil = PerfilModel.objects.filter(user=self.request.user).first()
-        serializer.save(usuario=perfil)
+        # avoid raising a 500 when the user already reported the incidencia
+        from django.db import IntegrityError
+        from rest_framework import serializers as drf_serializers
+        try:
+            serializer.save(usuario=perfil)
+        except IntegrityError:
+            # return a validation error so the API responds with 400 instead of 500
+            raise drf_serializers.ValidationError({'detail': 'Ya has apoyado/confirmado esta incidencia.'})
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def me(self, request):

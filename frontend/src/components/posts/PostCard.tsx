@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { MapPin, ThumbsUp, MessageCircle, Users } from 'lucide-react'
+import ConfirmModal from '../../components/ui/ConfirmModal'
 import { timeAgo, formatDateShort } from '../../utils/date'
 
 type Post = {
@@ -36,8 +37,25 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
   const autorText = typeof (post as any).autor === 'object'
     ? ((post as any).autor?.nombre || (post as any).autor?.first_name || String((post as any).autor))
     : (post.autor || '')
+  const [isReported, setIsReported] = useState<boolean>((post as any).reported_by_me ?? false)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  useEffect(() => {
+    setIsReported((post as any).reported_by_me ?? false)
+  }, [post])
+
   const handleApoyar = (e: React.MouseEvent) => {
     e.stopPropagation()
+    // if already reported by current user, do nothing
+    if ((post as any).reported_by_me || isReported) return
+    // open confirmation modal
+    setShowConfirm(true)
+  }
+
+  const doConfirm = () => {
+    // optimistic update: mark reported locally, disable button
+    setIsReported(true)
+    setShowConfirm(false)
     onApoyar?.(post.id)
   }
 
@@ -46,8 +64,15 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
     onLike?.(post.id)
   }
 
+  const handleOpenIfNotAction = (e: React.MouseEvent) => {
+    // if the user clicked a button (or inside a button), don't open the modal details
+    const el = e.target as HTMLElement | null
+    if (el && el.closest('button')) return
+    onOpen(post)
+  }
+
   return (
-    <article onClick={() => onOpen(post)} className="cursor-pointer">
+    <article onClick={handleOpenIfNotAction} className="cursor-pointer">
       <div className="flex flex-col items-stretch justify-start rounded-xl shadow-sm bg-white border border-blue-50 overflow-hidden hover:shadow-md transition-all duration-200 hover:border-blue-100">
         {post.imagen && (
           <div 
@@ -144,10 +169,11 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
               {/* Botón Apoyar (color del logo) */}
               <button 
                 onClick={handleApoyar}
-                className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white border border-[#065f46] rounded-lg hover:bg-[#054f3f] hover:border-[#054f3f] transition-all duration-200"
+                disabled={isReported || (post as any).reported_by_me}
+                className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white border border-[#065f46] rounded-lg hover:bg-[#054f3f] hover:border-[#054f3f] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Users size={16} />
-                <span className="text-sm font-medium">Apoyar</span>
+                <span className="text-sm font-medium">{(isReported || (post as any).reported_by_me) ? 'Apoyado' : 'Apoyar'}</span>
               </button>
 
               {/* Contador de comentarios */}
@@ -191,6 +217,14 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
           </div>
         </div>
       </div>
+      {/* Confirm modal for apoyar */}
+      <ConfirmModal
+        open={showConfirm}
+        title="Confirmar apoyo"
+        message="Si confirmas, estarás indicando que este incidente existe. ¿Deseas continuar?"
+        onConfirm={doConfirm}
+        onCancel={() => setShowConfirm(false)}
+      />
     </article>
   )
 }
