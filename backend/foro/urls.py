@@ -4,6 +4,7 @@ from .views import (
     ComentarioViewSet, ReaccionViewSet, ReporteViewSet,
     TipoReaccionViewSet, NotificacionViewSet, PreviewIncidenciasAPIView
 )
+from .views import IncidenciaModalAPIView
 from django.urls import path
 
 router = DefaultRouter()
@@ -18,4 +19,5 @@ router.register(r'notificaciones', NotificacionViewSet)
 
 urlpatterns = router.urls + [
     path('incidencias_preview/', PreviewIncidenciasAPIView.as_view(), name='incidencias-preview'),
+    path('incidencias_modal/<int:pk>/', IncidenciaModalAPIView.as_view(), name='incidencias-modal'),
 ]

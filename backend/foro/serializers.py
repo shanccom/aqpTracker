@@ -210,3 +210,95 @@ class NotificacionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notificacion
         fields = ['id', 'usuario', 'actor', 'mensaje', 'incidencia', 'leida', 'fecha_creacion']
+
+
+class IncidenciaModalSerializer(serializers.ModelSerializer):
+    """Serializer intended for the frontend PostModal shape.
+
+    Returns a UI-friendly payload with imagenes, author info, mapped comentarios and counts.
+    """
+    autor = PerfilMinSerializer(source='usuario', read_only=True)
+    tiempo = serializers.DateTimeField(source='fecha_creacion', read_only=True)
+    distrito = serializers.CharField(source='distrito.nombre', read_only=True)
+    estado = serializers.SerializerMethodField()
+    imagen = serializers.SerializerMethodField()
+    imagenes = serializers.SerializerMethodField()
+    comentarios = serializers.SerializerMethodField()
+    reacciones = serializers.SerializerMethodField()
+    reports_count = serializers.SerializerMethodField()
+    primer_reportero = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Incidencia
+        fields = [
+            'id', 'titulo', 'descripcion', 'direccion', 'latitud', 'longitud',
+            'distrito', 'estado', 'imagen', 'imagenes', 'autor', 'tiempo',
+            'comentarios', 'reacciones', 'reports_count', 'primer_reportero'
+        ]
+
+    def get_estado(self, obj):
+        if obj.estado:
+            return {'id': obj.estado.id, 'nombre': obj.estado.nombre, 'descripcion': obj.estado.descripcion}
+        return None
+
+    def get_imagen(self, obj):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        first = obj.imagenes.first() if hasattr(obj, 'imagenes') else None
+        if first:
+            try:
+                return request.build_absolute_uri(first.imagen.url) if request else first.imagen.url
+            except Exception:
+                return first.imagen.url
+        legacy = getattr(obj, 'imagen', None)
+        if legacy:
+            try:
+                return request.build_absolute_uri(legacy.url) if request else legacy.url
+            except Exception:
+                return legacy.url
+        return None
+
+    def get_imagenes(self, obj):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        imgs = []
+        for im in obj.imagenes.all():
+            try:
+                url = request.build_absolute_uri(im.imagen.url) if request else im.imagen.url
+            except Exception:
+                url = im.imagen.url
+            imgs.append({'id': im.id, 'url': url})
+        return imgs
+
+    def get_comentarios(self, obj):
+        out = []
+        for c in obj.comentarios.all().order_by('fecha_creacion'):
+            usuario = getattr(c, 'usuario', None)
+            author = None
+            avatar = None
+            if usuario:
+                author = (usuario.user.first_name or '') or usuario.user.email
+                try:
+                    request = self.context.get('request') if hasattr(self, 'context') else None
+                    avatar = request.build_absolute_uri(usuario.foto.url) if (request and usuario.foto) else (usuario.foto.url if usuario.foto else '/static/img/profile.jpg')
+                except Exception:
+                    avatar = usuario.foto.url if getattr(usuario, 'foto', None) else '/static/img/profile.jpg'
+            out.append({
+                'id': c.id,
+                'author': author or 'Usuario anónimo',
+                'avatar': avatar or '/static/img/profile.jpg',
+                'text': c.contenido,
+                'time': c.fecha_creacion,
+                'likes': 0,
+            })
+        return out
+
+    def get_reacciones(self, obj):
+        return obj.reacciones.count() if hasattr(obj, 'reacciones') else 0
+
+    def get_reports_count(self, obj):
+        return obj.reporte_set.count()
+
+    def get_primer_reportero(self, obj):
+        first = obj.reporte_set.order_by('fecha_reporte').select_related('usuario').first()
+        if not first:
+            return None
+        return PerfilMinSerializer(first.usuario, context=self.context).data

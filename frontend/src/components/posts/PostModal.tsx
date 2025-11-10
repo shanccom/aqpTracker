@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { X, Users, ThumbsUp, MessageCircle } from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
 import { timeAgo, formatDateTime } from '../../utils/date'
@@ -29,6 +29,12 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
   const [reported, setReported] = useState<boolean>(false)
   const [reportsCountState, setReportsCountState] = useState<number>(post?.reports_count ?? 0)
   const [loadingReport, setLoadingReport] = useState(false)
+
+  const [fullPost, setFullPost] = useState<any | null>(null)
+
+  // gallery state
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [galleryIndex, setGalleryIndex] = useState(0)
 
   if (!post) return null
 
@@ -62,6 +68,63 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
     checkReported()
     return () => { mounted = false }
   }, [post?.id])
+
+  // fetch full incidencia details when modal opens (imagenes, coords, etc.)
+  useEffect(() => {
+    let mounted = true
+    async function fetchDetail() {
+      if (!post) return
+      try {
+        const res = await api.get(`/api/foro/incidencias/${post.id}/`)
+        if (!mounted) return
+        setFullPost(res.data)
+      } catch (e) {
+        // ignore - we can render with preview
+      }
+    }
+    fetchDetail()
+    return () => { mounted = false }
+  }, [post?.id])
+
+  // build images list (main image + additional images)
+  const images: string[] = useMemo(() => {
+    const srcs: string[] = []
+    const source = fullPost ?? post
+    if (!source) return srcs
+    if (source.imagen) srcs.push(source.imagen)
+    if (Array.isArray(source.imagenes) && source.imagenes.length > 0) {
+      source.imagenes.forEach((i: any) => { if (i && i.url) srcs.push(i.url) })
+    }
+    return Array.from(new Set(srcs))
+  }, [fullPost, post])
+
+  // coordinates taken preferably from detail
+  const rawLat = (fullPost as any)?.latitud ?? (fullPost as any)?.lat ?? (post as any).latitud ?? (post as any).lat
+  const rawLon = (fullPost as any)?.longitud ?? (fullPost as any)?.lon ?? (post as any).longitud ?? (post as any).lon
+  const lat = rawLat !== undefined && rawLat !== null ? parseFloat(String(rawLat)) : undefined
+  const lon = rawLon !== undefined && rawLon !== null ? parseFloat(String(rawLon)) : undefined
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lon)
+
+  const openGalleryAt = (idx: number) => {
+    if (images.length === 0) return
+    setGalleryIndex(idx)
+    setGalleryOpen(true)
+  }
+
+  const closeGallery = () => setGalleryOpen(false)
+  const nextImage = () => setGalleryIndex(i => (i + 1) % images.length)
+  const prevImage = () => setGalleryIndex(i => (i - 1 + images.length) % images.length)
+
+  useEffect(() => {
+    if (!galleryOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeGallery()
+      if (e.key === 'ArrowRight') nextImage()
+      if (e.key === 'ArrowLeft') prevImage()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [galleryOpen, images.length])
 
   const handleSupport = async () => {
     if (reported) return
@@ -157,25 +220,43 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
           <h1 className="text-2xl font-bold text-gray-900 mb-3">{post.titulo}</h1>
           <div className="text-gray-600 mb-6 leading-relaxed">{post.descripcion}</div>
 
-          {/* Imagen principal */}
-          {post.imagen && (
-            <div 
-              className="w-full bg-center bg-no-repeat bg-cover aspect-[16/7] rounded-xl mb-6 border border-gray-200 bg-gray-50"
-              style={{ backgroundImage: `url('${post.imagen}')` }} 
-            />
+          {/* Imagenes como galería: miniaturas que abren una vista ampliada */}
+          {images.length > 0 && (
+            <div className="mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {images.map((src, idx) => (
+                  <button key={idx} onClick={() => openGalleryAt(idx)} className="block w-full h-28 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                    <img src={src} alt={`Foto ${idx+1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+              <div className="text-xs text-gray-500 mt-2">Pulsa una imagen para verla en detalle</div>
+            </div>
           )}
 
-          {/* Grid de imágenes adicionales */}
-          {post.imagenes && post.imagenes.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-              {post.imagenes.slice(0, 4).map((img, idx) => (
-                <img 
-                  key={img.id || idx} 
-                  alt={`Foto del incidente ${idx+1}`} 
-                  className="w-full h-24 object-cover rounded-lg border border-gray-200 bg-gray-50"
-                  src={img.url} 
-                />
-              ))}
+          {/* Mapa grande si hay coordenadas (proviene del detalle si está disponible) */}
+          {hasCoords && (
+            <div className="w-full rounded-md overflow-hidden border border-gray-100 mb-6">
+              {(() => {
+                const delta = 0.0025
+                const left = (lon as number) - delta
+                const right = (lon as number) + delta
+                const bottom = (lat as number) - delta
+                const top = (lat as number) + delta
+                const bbox = encodeURIComponent(`${left},${bottom},${right},${top}`)
+                const marker = encodeURIComponent(`${lat},${lon}`)
+                const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${marker}`
+                const outlink = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}`
+                return (
+                  <div>
+                    <iframe title={`map-modal-${post.id}`} src={src} className="w-full h-60" style={{ border: 0 }} />
+                    <div className="p-2 text-xs text-gray-500 flex items-center justify-between">
+                      <div>{direccionText || distritoText || 'Ubicación'}</div>
+                      <a href={outlink} target="_blank" rel="noopener noreferrer" className="underline">Ver en OpenStreetMap</a>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
 
@@ -261,6 +342,17 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
           onConfirm={doConfirmSupport}
           onCancel={() => setShowConfirm(false)}
         />
+        {/* Image gallery overlay */}
+        {galleryOpen && images.length > 0 && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80">
+            <button onClick={closeGallery} className="absolute top-6 right-6 text-white p-2 rounded-md">Cerrar</button>
+            <button onClick={prevImage} className="absolute left-6 text-white p-2 rounded-md">◀</button>
+            <div className="max-w-[90vw] max-h-[90vh] flex items-center justify-center">
+              <img src={images[galleryIndex]} alt={`Imagen ${galleryIndex+1}`} className="max-w-full max-h-full object-contain rounded-md" />
+            </div>
+            <button onClick={nextImage} className="absolute right-6 text-white p-2 rounded-md">▶</button>
+          </div>
+        )}
       </div>
     </div>
   )

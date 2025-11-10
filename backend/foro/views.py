@@ -227,6 +227,21 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 
 
+class IncidenciaModalAPIView(APIView):
+    """Return a frontend-friendly incidencia payload for the PostModal.
+
+    URL: /api/foro/incidencias_modal/<pk>/
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request, pk, *args, **kwargs):
+        # import the serializer here to avoid startup import-time cycles
+        from .serializers import IncidenciaModalSerializer
+        inc = get_object_or_404(Incidencia.objects.select_related('distrito', 'estado').prefetch_related('imagenes', 'comentarios__usuario', 'reacciones', 'reporte_set'), pk=pk)
+        serializer = IncidenciaModalSerializer(inc, context={'request': request})
+        return Response(serializer.data)
+
+
 class PreviewIncidenciasAPIView(APIView):
     """Lightweight endpoint for frontend preview of incidencias.
 
