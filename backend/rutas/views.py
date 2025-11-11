@@ -1,51 +1,24 @@
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
-from .models import Empresa, Ruta, Paradero, RutaParadero
+from .models import Empresa, Ruta, Recorrido, Paradero, RecorridoParadero
 
-
-def empresa_list(request):
+def empresas_list(request):
+    """API endpoint que lista todas las empresas"""
     empresas = Empresa.objects.all().values('id', 'nombre', 'descripcion', 'color_principal')
     return JsonResponse(list(empresas), safe=False)
 
-# 🔹 API: Rutas de una empresa
-def rutas_por_empresa(request, empresa_id):
-    rutas = Ruta.objects.filter(empresa_id=empresa_id).values(
-        'id', 'codigo', 'nombre', 'sentido', 'color_linea', 'grosor_linea'
-    )
+
+def empresa_rutas(request, empresa_id):
+    """API endpoint que lista las rutas de una empresa"""
+    rutas = Ruta.objects.filter(empresa_id=empresa_id).values('id', 'nombre', 'codigo', 'empresa')
     return JsonResponse(list(rutas), safe=False)
 
-def index(request):
-    """Vista principal que muestra la lista de empresas"""
-    empresas = Empresa.objects.all()
-    return render(request, 'rutas/index.html', {'empresas': empresas})
-
-
-def empresa_detalle(request, empresa_id):
-    """Vista que muestra las rutas de una empresa específica"""
-    empresa = get_object_or_404(Empresa, id=empresa_id)
-    rutas = empresa.rutas.all()
-    return render(request, 'rutas/empresa_detalle.html', {
-        'empresa': empresa,
-        'rutas': rutas
-    })
-
-
-def ruta_detalle(request, ruta_id):
-    """Vista que muestra el detalle de una ruta con su mapa"""
-    ruta = get_object_or_404(Ruta, id=ruta_id)
-    paraderos = RutaParadero.objects.filter(ruta=ruta).select_related('paradero')
-    
-    return render(request, 'rutas/ruta_detalle.html', {
-        'ruta': ruta,
-        'paraderos': paraderos
-    })
-
-
-def ruta_json(request, ruta_id):
-    ruta = get_object_or_404(Ruta, id=ruta_id)
+def recorrido_json(request, recorrido_id):
+    """API endpoint que devuelve los datos de un recorrido específico (IDA o VUELTA)"""
+    recorrido = get_object_or_404(Recorrido, id=recorrido_id)
     paraderos_data = []
-
-    for rp in RutaParadero.objects.filter(ruta=ruta).select_related('paradero'):
+    
+    for rp in RecorridoParadero.objects.filter(recorrido=recorrido).select_related('paradero'):
         paraderos_data.append({
             'nombre': rp.paradero.nombre,
             'latitud': rp.paradero.latitud,
@@ -54,26 +27,53 @@ def ruta_json(request, ruta_id):
             'orden': rp.orden,
             'distancia_metros': rp.distancia_metros
         })
+    
+    data = {
+        'id': recorrido.id,
+        'ruta_codigo': recorrido.ruta.codigo,
+        'ruta_nombre': recorrido.ruta.nombre,
+        'sentido': recorrido.sentido,
+        'empresa': recorrido.ruta.empresa.nombre,
+        'color_linea': recorrido.color_linea,
+        'grosor_linea': recorrido.grosor_linea,
+        'coordenadas': recorrido.coordenadas,
+        'paraderos': paraderos_data
+    }
+    
+    return JsonResponse(data)
 
+
+def ruta_json(request, ruta_id):
+    """API endpoint que devuelve ambos recorridos (IDA y VUELTA) de una ruta"""
+    ruta = get_object_or_404(Ruta, id=ruta_id)
+    recorridos_data = []
+    
+    for recorrido in ruta.recorridos.all():
+        paraderos_data = []
+        for rp in RecorridoParadero.objects.filter(recorrido=recorrido).select_related('paradero'):
+            paraderos_data.append({
+                'nombre': rp.paradero.nombre,
+                'latitud': rp.paradero.latitud,
+                'longitud': rp.paradero.longitud,
+                'es_popular': rp.paradero.es_popular,
+                'orden': rp.orden,
+                'distancia_metros': rp.distancia_metros
+            })
+        
+        recorridos_data.append({
+            'id': recorrido.id,
+            'sentido': recorrido.sentido,
+            'color_linea': recorrido.color_linea,
+            'grosor_linea': recorrido.grosor_linea,
+            'coordenadas': recorrido.coordenadas,
+            'paraderos': paraderos_data
+        })
+    
     data = {
         'codigo': ruta.codigo,
         'nombre': ruta.nombre,
-        'sentido': ruta.sentido,
         'empresa': ruta.empresa.nombre,
-        'color_linea': ruta.color_linea,
-        'grosor_linea': ruta.grosor_linea,
-        'coordenadas': ruta.coordenadas,
-        'paraderos': paraderos_data
+        'recorridos': recorridos_data
     }
-
-    return JsonResponse(data)
-
-def empresa_detalle_api(request, empresa_id):
-    empresa = get_object_or_404(Empresa, id=empresa_id)
-    data = {
-        'id': empresa.id,
-        'nombre': empresa.nombre,
-        'descripcion': empresa.descripcion,
-        'color_principal': empresa.color_principal,
-    }
+    
     return JsonResponse(data)

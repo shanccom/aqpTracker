@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>ALTOSELVAALAGRED_vuelta</name>
+    <Placemark>
+      <name>Punto 3</name>
+      <Point><coordinates>-71.5330,-16.4020,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Punto 2</name>
+      <Point><coordinates>-71.5350,-16.4000,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Punto 1</name>
+      <Point><coordinates>-71.5370,-16.3989,0</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>

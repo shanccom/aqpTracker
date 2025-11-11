@@ -1,26 +1,73 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { rutasAPI } from '../../../services/api';
-import RutaMap from '../../../components/RutaMap/RutaMap';
-import type { RutaJSON } from '../../../types';
+import { useEffect, useState, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-const RutaDetail: React.FC = () => {
-  const { rutaId } = useParams<{ rutaId: string }>();
-  const [ruta, setRuta] = useState<RutaJSON | null>(null);
+// Fix para los iconos de Leaflet
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+// Interfaces
+interface Paradero {
+  nombre: string;
+  latitud: number;
+  longitud: number;
+  es_popular?: boolean;
+  orden: number;
+  distancia_metros?: number;
+}
+
+interface Recorrido {
+  id: number;
+  sentido: 'IDA' | 'VUELTA';
+  color_linea: string;
+  grosor_linea: number;
+  coordenadas: [number, number][];
+  paraderos: Paradero[];
+}
+
+interface RutaCompleta {
+  codigo: string;
+  nombre: string;
+  empresa: string;
+  recorridos: Recorrido[];
+}
+
+interface RutaDetailProps {
+  rutaId: number;
+  onBack: () => void;
+}
+
+const API_BASE_URL = 'http://localhost:8000';
+
+const RutaDetail = ({ rutaId, onBack }: RutaDetailProps) => {
+  const [rutaCompleta, setRutaCompleta] = useState<RutaCompleta | null>(null);
+  const [tipoActivo, setTipoActivo] = useState<'IDA' | 'VUELTA'>('IDA');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const polylineRef = useRef<L.Polyline | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
 
   useEffect(() => {
     const fetchRuta = async () => {
-      if (!rutaId) return;
-
       try {
         setLoading(true);
-        const data = await rutasAPI.getJSON(Number(rutaId));
-        setRuta(data);
+        const response = await fetch(`${API_BASE_URL}/api/rutas/ruta/${rutaId}/json/`);
+        if (!response.ok) throw new Error('Error al cargar ruta completa');
+        const data = await response.json();
+        setRutaCompleta(data);
       } catch (err) {
-        setError('Error al cargar la ruta. Por favor, intenta nuevamente.');
-        console.error('Error fetching ruta:', err);
+        setError(err instanceof Error ? err.message : 'Error desconocido');
       } finally {
         setLoading(false);
       }
@@ -29,142 +76,216 @@ const RutaDetail: React.FC = () => {
     fetchRuta();
   }, [rutaId]);
 
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    const map = L.map(mapContainerRef.current).setView([-16.4090, -71.5375], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    mapRef.current = map;
+
+    setTimeout(() => {
+      mapRef.current?.invalidateSize();
+    }, 300);
+
+    return () => {
+      mapRef.current?.remove();
+      mapRef.current = null;
+    };
+  }, [rutaCompleta]);
+
+  useEffect(() => {
+    if (!mapRef.current || !rutaCompleta) return;
+
+    const recorrido = rutaCompleta.recorridos.find(r => r.sentido === tipoActivo);
+    if (!recorrido) return;
+
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current = [];
+    polylineRef.current?.remove();
+    polylineRef.current = null;
+
+    const coordinates = recorrido.coordenadas;
+    const color = recorrido.color_linea || (tipoActivo === 'IDA' ? '#3b82f6' : '#ef4444');
+
+    polylineRef.current = L.polyline(coordinates, {
+      color,
+      weight: recorrido.grosor_linea || 4,
+      opacity: 0.7
+    }).addTo(mapRef.current);
+
+    recorrido.paraderos.forEach((paradero, index) => {
+      const marker = L.marker([paradero.latitud, paradero.longitud], {
+        icon: L.divIcon({
+          className: 'custom-marker',
+          html: `<div style="background-color: ${color}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${index + 1}</div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
+        })
+      }).addTo(mapRef.current!);
+
+      const popularBadge = paradero.es_popular ? '⭐' : '';
+      marker.bindPopup(`<b>${paradero.nombre}</b> ${popularBadge}<br>Paradero ${index + 1} (${recorrido.sentido})`);
+      markersRef.current.push(marker);
+    });
+
+    if (coordinates.length > 0) {
+      mapRef.current.fitBounds(polylineRef.current.getBounds(), { 
+        padding: [50, 50],
+        maxZoom: 16 
+      });
+    }
+  }, [rutaCompleta, tipoActivo]);
+
+  const decodePolyline = (encoded: string): [number, number][] => {
+    const points: [number, number][] = [];
+    let index = 0, lat = 0, lng = 0;
+
+    while (index < encoded.length) {
+      let b, shift = 0, result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlat = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlng = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      points.push([lat / 1e5, lng / 1e5]);
+    }
+    return points;
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (error || !ruta) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 text-xl mb-4">{error || 'Ruta no encontrada'}</p>
-          <Link to="/" className="text-blue-600 hover:underline">
-            Volver al inicio
-          </Link>
+      <div className="space-y-4">
+        <button onClick={onBack} className="text-blue-600 hover:text-blue-800 font-medium">
+          ← Volver a rutas
+        </button>
+        <div className="flex justify-center items-center p-8 bg-white rounded-lg">
+          <div className="text-lg">Cargando ruta...</div>
         </div>
       </div>
     );
   }
 
-  // Separar paraderos populares de los comunes
-  const paraderosPopulares = ruta.paraderos.filter((p) => p.es_popular);
-  const paraderosComunes = ruta.paraderos.filter((p) => !p.es_popular);
+  if (error || !rutaCompleta) {
+    return (
+      <div className="space-y-4">
+        <button onClick={onBack} className="text-blue-600 hover:text-blue-800 font-medium">
+          ← Volver a rutas
+        </button>
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          Error: {error || 'No se encontró la ruta'}
+        </div>
+      </div>
+    );
+  }
+
+  const recorridoActual = rutaCompleta.recorridos.find(r => r.sentido === tipoActivo);
+  const paraderosPopulares = recorridoActual?.paraderos
+    .filter(p => p.es_popular)
+    .sort((a, b) => a.orden - b.orden)
+    .slice(0, 5) || [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-gradient-to-r from-gray-800 to-gray-900 text-white py-8 mb-8 shadow-lg">
-        <div className="container mx-auto px-4">
-          <Link to="/" className="inline-block mb-4 text-white hover:underline">
-            ← Volver al inicio
-          </Link>
-          <div className="flex items-center gap-4 mb-3">
-            <div
-              className="w-4 h-12 rounded"
-              style={{ backgroundColor: ruta.color_linea }}
-            ></div>
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold">
-                {ruta.nombre}
-              </h1>
-              <p className="text-lg opacity-90 mt-1">
-                {ruta.empresa} - {ruta.sentido}
-              </p>
-            </div>
+    <div className="space-y-4">
+      <button onClick={onBack} className="text-blue-600 hover:text-blue-800 font-medium">
+        ← Volver a rutas
+      </button>
+
+      <div className="bg-white rounded-lg shadow-md p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-2xl font-bold">{rutaCompleta.nombre}</h2>
+            {rutaCompleta.codigo && <span className="text-sm text-gray-600">Código: {rutaCompleta.codigo}</span>}
+            {rutaCompleta.empresa && <span className="text-sm text-gray-500 block">Empresa: {rutaCompleta.empresa}</span>}
           </div>
-          <p className="text-sm opacity-75">Código: {ruta.codigo}</p>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setTipoActivo('IDA')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                tipoActivo === 'IDA' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              IDA
+            </button>
+            <button
+              onClick={() => setTipoActivo('VUELTA')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                tipoActivo === 'VUELTA' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              VUELTA
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="container mx-auto px-4 pb-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Mapa */}
-          <div className="lg:col-span-2">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              Recorrido de la Ruta
-            </h2>
-            <RutaMap ruta={ruta} />
+        <div className="flex gap-4">
+          <div className="flex-1 bg-gray-200 rounded-lg" style={{ minHeight: '600px' }}>
+            <div 
+              ref={mapContainerRef} 
+              className="w-full h-full rounded-lg border-2 border-gray-300 bg-gray-100"
+              style={{ minHeight: '600px', height: '600px' }}
+            />
           </div>
 
-          {/* Información lateral */}
-          <div className="space-y-6">
-            {/* Paraderos Populares */}
-            {paraderosPopulares.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <span className="text-2xl">⭐</span>
-                  Paraderos Populares
-                </h3>
-                <ul className="space-y-3">
-                  {paraderosPopulares.map((paradero, index) => (
-                    <li
-                      key={`popular-${paradero.id}-${index}`}
-                      className="flex items-start gap-3 pb-3 border-b border-gray-100 last:border-0"
-                    >
-                      <div className="w-6 h-6 rounded-full bg-red-500 flex-shrink-0 mt-0.5"></div>
-                      <div>
-                        <p className="font-semibold text-gray-800">
-                          {paradero.nombre}
-                        </p>
-                        {paradero.distancia_metros !== undefined && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            A {paradero.distancia_metros.toFixed(0)}m de la ruta
-                          </p>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Paraderos Comunes */}
-            {paraderosComunes.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">
-                  Otros Paraderos
-                </h3>
-                <ul className="space-y-2 max-h-96 overflow-y-auto">
-                  {paraderosComunes.map((paradero, index) => (
-                    <li
-                      key={`comun-${paradero.id}-${index}`}
-                      className="flex items-start gap-3 text-sm"
-                    >
-                      <div className="w-4 h-4 rounded-full bg-blue-500 flex-shrink-0 mt-1"></div>
-                      <p className="text-gray-700">{paradero.nombre}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Estadísticas */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">
-                Información
+          <div className="w-80">
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border-2 border-purple-200">
+              <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+                <span className="text-2xl">⭐</span>
+                Paraderos Populares
               </h3>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-gray-500">Total de Paraderos</p>
-                  <p className="text-2xl font-bold text-gray-800">
-                    {ruta.paraderos.length}
-                  </p>
+              {paraderosPopulares.length > 0 ? (
+                <div className="space-y-2">
+                  {paraderosPopulares.map((paradero, index) => (
+                    <div
+                      key={`${paradero.latitud}-${paradero.longitud}-${index}`}
+                      className="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[24px] text-center">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-medium text-sm text-gray-800">{paradero.nombre}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Orden: {paradero.orden} {paradero.distancia_metros && `• ${Math.round(paradero.distancia_metros)}m`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500">Paraderos Populares</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    {paraderosPopulares.length}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Puntos de Recorrido</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {ruta.coordenadas.length}
-                  </p>
-                </div>
+              ) : (
+                <p className="text-gray-500 text-sm">No hay datos de popularidad disponibles</p>
+              )}
+            </div>
+
+            <div className="mt-4 bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h3 className="font-bold mb-2">Información del recorrido</h3>
+              <div className="space-y-1 text-sm">
+                <p className="text-gray-700">
+                  <span className="font-medium">Tipo:</span> {tipoActivo}
+                </p>
+                <p className="text-gray-700">
+                  <span className="font-medium">Paraderos:</span> {recorridoActual?.paraderos.length || 0}
+                </p>
               </div>
             </div>
           </div>

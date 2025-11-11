@@ -1,53 +1,33 @@
-import axios from 'axios';
-import type { Empresa, Ruta, RutaJSON } from '../types';
+import type { Empresa, Ruta, RutaCompleta, Recorrido  } from "../types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-export const empresasAPI = {
+export const rutasAPI = {
   // Obtener todas las empresas
-  getAll: async (): Promise<Empresa[]> => {
-    const response = await api.get('/api/rutas/empresas/');
-    return response.data;
-  },
-
-  // Obtener una empresa por ID
-  getById: async (id: number): Promise<Empresa> => {
-    const response = await api.get(`/api/rutas/empresas/${id}/`);
-    return response.data;
+  getEmpresas: async (): Promise<Empresa[]> => {
+    const response = await fetch(`${API_BASE_URL}/api/rutas/empresas/`);
+    if (!response.ok) throw new Error('Error al cargar empresas');
+    return response.json();
   },
 
   // Obtener rutas de una empresa
-  getRutas: async (empresaId: number): Promise<Ruta[]> => {
-    const response = await api.get(`/api/rutas/empresas/${empresaId}/rutas/`);
-    return response.data;
+  getRutasEmpresa: async (empresaId: number): Promise<Ruta[]> => {
+    const response = await fetch(`${API_BASE_URL}/api/rutas/empresas/${empresaId}/rutas/`);
+    if (!response.ok) throw new Error('Error al cargar rutas');
+    return response.json();
   },
+
+  // Obtener ruta completa (con IDA y VUELTA)
+  getRutaCompleta: async (rutaId: number): Promise<RutaCompleta> => {
+    const response = await fetch(`${API_BASE_URL}/api/rutas/ruta/${rutaId}/json/`);
+    if (!response.ok) throw new Error('Error al cargar ruta completa');
+    return response.json();
+  },
+
+  // Obtener recorrido específico (IDA o VUELTA)
+  getRecorrido: async (recorridoId: number): Promise<Recorrido> => {
+    const response = await fetch(`${API_BASE_URL}/api/rutas/recorrido/${recorridoId}/json/`);
+    if (!response.ok) throw new Error('Error al cargar recorrido');
+    return response.json();
+  }
 };
-
-export const rutasAPI = {
-  // Obtener todas las rutas
-  getAll: async (): Promise<Ruta[]> => {
-    const response = await api.get('/api/rutas/');
-    return response.data;
-  },
-
-  // Obtener una ruta por ID
-  getById: async (id: number): Promise<Ruta> => {
-    const response = await api.get(`/api/rutas/${id}/`);
-    return response.data;
-  },
-
-  // Obtener datos JSON completos de la ruta (con coordenadas y paraderos)
-  getJSON: async (id: number): Promise<RutaJSON> => {
-    const response = await api.get(`/api/rutas/ruta/${id}/json/`);
-    return response.data;
-  },
-};
-
-export default api;

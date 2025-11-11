@@ -3,13 +3,12 @@ import xml.etree.ElementTree as ET
 from math import radians, sin, cos, sqrt, atan2
 from django.core.management.base import BaseCommand
 from django.conf import settings
-from rutas.models import Empresa, Ruta, Paradero, RutaParadero
+from rutas.models import Empresa, Ruta, Recorrido, Paradero, RecorridoParadero
 
 
 class Command(BaseCommand):
     help = 'Carga rutas desde archivos KML y asocia paraderos cercanos'
 
-    # Paraderos populares de Arequipa (predefinidos)
     PARADEROS_POPULARES = [
         {'nombre': 'Plaza de Armas', 'lat': -16.3989, 'lng': -71.5370, 'popular': True},
         {'nombre': 'Parque Mayta Cápac', 'lat': -16.4067, 'lng': -71.5228, 'popular': True},
@@ -23,7 +22,7 @@ class Command(BaseCommand):
 
     def calcular_distancia(self, lat1, lng1, lat2, lng2):
         """Calcula la distancia en metros entre dos coordenadas usando Haversine"""
-        R = 6371000  # Radio de la Tierra en metros
+        R = 6371000
         
         lat1_rad = radians(lat1)
         lat2_rad = radians(lat2)
@@ -40,12 +39,9 @@ class Command(BaseCommand):
         tree = ET.parse(archivo_path)
         root = tree.getroot()
         
-        # Namespace de KML
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-        
         coordenadas = []
         
-        # Buscar todas las coordenadas en el KML
         for coordinates in root.findall('.//kml:coordinates', ns):
             coords_text = coordinates.text.strip()
             for coord in coords_text.split():
@@ -74,15 +70,14 @@ class Command(BaseCommand):
             if created:
                 self.stdout.write(f'  ✓ Creado: {paradero.nombre}')
 
-    def asociar_paraderos(self, ruta, coordenadas):
-        """Asocia paraderos cercanos a la ruta"""
+    def asociar_paraderos(self, recorrido, coordenadas):
+        """Asocia paraderos cercanos al recorrido"""
         paraderos = Paradero.objects.all()
-        distancia_maxima = 100  # metros
+        distancia_maxima = 100
         
         for paradero in paraderos:
             distancia_minima = float('inf')
             
-            # Encontrar el punto más cercano de la ruta al paradero
             for coord in coordenadas:
                 distancia = self.calcular_distancia(
                     coord[0], coord[1],
@@ -91,17 +86,33 @@ class Command(BaseCommand):
                 if distancia < distancia_minima:
                     distancia_minima = distancia
             
-            # Si está lo suficientemente cerca, crear la asociación
             if distancia_minima <= distancia_maxima:
-                RutaParadero.objects.get_or_create(
-                    ruta=ruta,
+                RecorridoParadero.objects.get_or_create(
+                    recorrido=recorrido,
                     paradero=paradero,
                     defaults={
                         'distancia_metros': distancia_minima,
-                        'orden': 0  # Se puede calcular el orden después
+                        'orden': 0
                     }
                 )
                 self.stdout.write(f'    ✓ Paradero "{paradero.nombre}" asociado ({distancia_minima:.1f}m)')
+
+    def extraer_info_nombre(self, nombre_archivo):
+        """Extrae sentido y nombre base del archivo"""
+        nombre_base = os.path.splitext(nombre_archivo)[0]
+        
+        # Detectar sentido
+        if nombre_base.startswith('IDA'):
+            sentido = 'IDA'
+            nombre_ruta = nombre_base.replace('IDA - ', '').replace('IDA-', '').strip()
+        elif nombre_base.startswith('VUELTA'):
+            sentido = 'VUELTA'
+            nombre_ruta = nombre_base.replace('VUELTA - ', '').replace('VUELTA-', '').strip()
+        else:
+            sentido = 'IDA'
+            nombre_ruta = nombre_base
+        
+        return sentido, nombre_ruta
 
     def add_arguments(self, parser):
         parser.add_argument('empresa_nombre', type=str, help='Nombre de la empresa')
@@ -125,7 +136,7 @@ class Command(BaseCommand):
         # Crear paraderos populares
         self.crear_paraderos()
         
-        # Procesar archivos KML
+        # Verificar carpeta
         if not os.path.exists(kml_folder):
             self.stdout.write(self.style.ERROR(f'✗ La carpeta {kml_folder} no existe'))
             return
@@ -134,44 +145,69 @@ class Command(BaseCommand):
         
         self.stdout.write(f'\nProcesando {len(archivos_kml)} archivos KML...\n')
         
+        # Agrupar archivos por ruta
+        rutas_agrupadas = {}
+        
         for archivo in archivos_kml:
-            archivo_path = os.path.join(kml_folder, archivo)
+            sentido, nombre_ruta = self.extraer_info_nombre(archivo)
             
-            # Determinar nombre y sentido desde el nombre del archivo
-            nombre_base = os.path.splitext(archivo)[0]
-            sentido = 'IDA' if 'ida' in nombre_base.lower() else 'VUELTA'
+            if nombre_ruta not in rutas_agrupadas:
+                rutas_agrupadas[nombre_ruta] = {}
             
-            self.stdout.write(f'📄 Procesando: {archivo}')
+            rutas_agrupadas[nombre_ruta][sentido] = archivo
+        
+        # Procesar cada ruta
+        for nombre_ruta, archivos_sentidos in rutas_agrupadas.items():
+            self.stdout.write(f'\n📍 Ruta: {nombre_ruta}')
             
-            # Parsear KML
-            coordenadas = self.parsear_kml(archivo_path)
+            # Crear código único
+            codigo = f"{empresa.nombre[:3].upper()}-{nombre_ruta[:10].upper()}"
             
-            if not coordenadas:
-                self.stdout.write(self.style.WARNING(f'  ⚠ No se encontraron coordenadas en {archivo}'))
-                continue
-            
-            # Crear código único para la ruta
-            codigo = f"{empresa.nombre[:3].upper()}-{nombre_base[:10]}-{sentido}"
-            
-            # Crear la ruta
-            ruta, created = Ruta.objects.get_or_create(
+            # Crear o obtener la ruta
+            ruta, ruta_created = Ruta.objects.get_or_create(
                 codigo=codigo,
                 defaults={
                     'empresa': empresa,
-                    'nombre': nombre_base,
-                    'sentido': sentido,
-                    'coordenadas': coordenadas,
-                    'archivo_kml': archivo,
-                    'color_linea': '#EF4444' if sentido == 'IDA' else '#3B82F6'
+                    'nombre': nombre_ruta
                 }
             )
             
-            if created:
-                self.stdout.write(f'  ✓ Ruta creada: {ruta.codigo} ({len(coordenadas)} puntos)')
-                
-                # Asociar paraderos
-                self.asociar_paraderos(ruta, coordenadas)
+            if ruta_created:
+                self.stdout.write(f'  ✓ Ruta creada: {ruta.codigo}')
             else:
-                self.stdout.write(f'  → Ruta ya existe: {ruta.codigo}')
+                self.stdout.write(f'  → Ruta existente: {ruta.codigo}')
+            
+            # Procesar cada sentido
+            for sentido, archivo in archivos_sentidos.items():
+                archivo_path = os.path.join(kml_folder, archivo)
+                
+                self.stdout.write(f'  📄 {sentido}: {archivo}')
+                
+                # Parsear KML
+                coordenadas = self.parsear_kml(archivo_path)
+                
+                if not coordenadas:
+                    self.stdout.write(self.style.WARNING(f'    ⚠ No se encontraron coordenadas'))
+                    continue
+                
+                # Color según sentido
+                color = '#EF4444' if sentido == 'IDA' else '#3B82F6'
+                
+                # Crear o actualizar recorrido
+                recorrido, rec_created = Recorrido.objects.get_or_create(
+                    ruta=ruta,
+                    sentido=sentido,
+                    defaults={
+                        'coordenadas': coordenadas,
+                        'archivo_kml': archivo,
+                        'color_linea': color
+                    }
+                )
+                
+                if rec_created:
+                    self.stdout.write(f'    ✓ Recorrido creado: {len(coordenadas)} puntos')
+                    self.asociar_paraderos(recorrido, coordenadas)
+                else:
+                    self.stdout.write(f'    → Recorrido ya existe')
         
         self.stdout.write(self.style.SUCCESS(f'\n✅ Proceso completado'))
