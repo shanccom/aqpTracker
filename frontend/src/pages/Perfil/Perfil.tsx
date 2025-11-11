@@ -3,6 +3,7 @@ import { useState } from "react";
 import PerfilHeader from "./components/PerfilHeader";
 import PerfilInfo from "./components/PerfilInfo";
 import MisReportes from "./components/MisReportes";
+import MyPostsTabs from "./components/MyPostsTabs";
 import EditarPerfilModal from "./components/EditarPerfilModal";
 import type { Profile } from './components/types';
 import styles from "./PerfilPage.module.css";
@@ -21,6 +22,7 @@ export default function PerfilPage() {
         <main className={styles.content}>
           <PerfilHeader />
           <PerfilInfo perfil={user as Profile} onEdit={() => setOpenModal(true)} />
+          <MyPostsTabs />
           <MisReportes />
         </main>
       </div>
