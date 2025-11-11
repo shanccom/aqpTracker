@@ -65,7 +65,8 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
           avatar,
           text: created.contenido || created.body || text,
           time: created.fecha_creacion || 'ahora',
-          likes: 0
+          likes: 0,
+          liked_by_me: false,
         }
         setComments(prev => [mapped, ...(prev || [])])
       } catch (err) {
@@ -99,9 +100,16 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
   const handleCommentLike = async (commentId: number) => {
     if (!defaultTipoId) return
     try {
-      await api.post('/api/foro/reacciones/', { comentario: commentId, tipo: defaultTipoId })
-      // update likes locally
-      setComments(prev => (prev || []).map((c: any) => c.id === commentId ? { ...c, likes: (c.likes || 0) + 1 } : c))
+      const res = await api.post('/api/foro/reacciones/toggle/', { comentario: commentId, tipo: defaultTipoId })
+      const data = res.data || {}
+      // prefer authoritative count from server when available
+      if (typeof data.count === 'number') {
+        setComments(prev => (prev || []).map((c: any) => c.id === commentId ? { ...c, likes: data.count, liked_by_me: !!data.liked_by_me } : c))
+      } else if (data.created) {
+        setComments(prev => (prev || []).map((c: any) => c.id === commentId ? { ...c, likes: (c.likes || 0) + 1, liked_by_me: true } : c))
+      } else if (data.deleted) {
+        setComments(prev => (prev || []).map((c: any) => c.id === commentId ? { ...c, likes: Math.max(0, (c.likes || 1) - 1), liked_by_me: false } : c))
+      }
     } catch (e) {
       // ignore for now (could show toast)
     }
@@ -253,7 +261,16 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-              <img src="/static/img/profile.jpg" alt="avatar" className="w-full h-full object-cover" />
+              {/* use author's foto URL from fullPost.autor (provided by IncidenciaModalSerializer) if available */}
+              <img
+                src={
+                  (fullPost && fullPost.autor && fullPost.autor.foto) ||
+                  (typeof (post as any).autor === 'object' && (post as any).autor?.foto) ||
+                  '/static/img/profile.jpg'
+                }
+                alt={autorText || 'avatar'}
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <p className="font-semibold text-gray-900">{autorText || 'Usuario anónimo'}</p>

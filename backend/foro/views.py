@@ -206,6 +206,67 @@ class ReaccionViewSet(viewsets.ViewSet):
         except Exception:
             return Response({'detail': 'Error deleting reaction.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def toggle(self, request):
+        """Toggle a reaction for the authenticated user.
+
+        Payload: { incidencia?: id, comentario?: id, tipo: id }
+        Returns: { created: bool, deleted: bool, count: int }
+        """
+        perfil = getattr(request.user, 'perfil', None)
+        if not perfil:
+            from usuario.models import Perfil as PerfilModel
+            perfil = PerfilModel.objects.filter(user=request.user).first()
+
+        incidencia_id = request.data.get('incidencia')
+        comentario_id = request.data.get('comentario')
+        tipo_id = request.data.get('tipo')
+
+        if bool(incidencia_id) == bool(comentario_id):
+            return Response({'detail': 'Debe especificar exactamente una de incidencia o comentario.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not tipo_id:
+            return Response({'detail': 'Debe especificar un tipo de reacción.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            tipo_id = int(tipo_id)
+        except Exception:
+            return Response({'detail': 'tipo must be an integer id.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Toggle for comentario
+        if comentario_id:
+            try:
+                comentario_id = int(comentario_id)
+            except Exception:
+                return Response({'detail': 'comentario must be an integer id.'}, status=status.HTTP_400_BAD_REQUEST)
+            existing = ReaccionComentario.objects.filter(usuario=perfil, comentario_id=comentario_id, tipo_id=tipo_id).first()
+            if existing:
+                existing.delete()
+                count = ReaccionComentario.objects.filter(comentario_id=comentario_id).count()
+                liked = ReaccionComentario.objects.filter(comentario_id=comentario_id, usuario=perfil).exists()
+                return Response({'deleted': True, 'count': count, 'liked_by_me': liked}, status=status.HTTP_200_OK)
+            # create
+            obj = ReaccionComentario.objects.create(usuario=perfil, comentario_id=comentario_id, tipo_id=tipo_id)
+            count = ReaccionComentario.objects.filter(comentario_id=comentario_id).count()
+            liked = ReaccionComentario.objects.filter(comentario_id=comentario_id, usuario=perfil).exists()
+            return Response({'created': True, 'count': count, 'liked_by_me': liked}, status=status.HTTP_201_CREATED)
+
+        # Toggle for incidencia
+        if incidencia_id:
+            try:
+                incidencia_id = int(incidencia_id)
+            except Exception:
+                return Response({'detail': 'incidencia must be an integer id.'}, status=status.HTTP_400_BAD_REQUEST)
+            existing = ReaccionIncidencia.objects.filter(usuario=perfil, incidencia_id=incidencia_id, tipo_id=tipo_id).first()
+            if existing:
+                existing.delete()
+                count = ReaccionIncidencia.objects.filter(incidencia_id=incidencia_id).count()
+                liked = ReaccionIncidencia.objects.filter(incidencia_id=incidencia_id, usuario=perfil).exists()
+                return Response({'deleted': True, 'count': count, 'liked_by_me': liked}, status=status.HTTP_200_OK)
+            obj = ReaccionIncidencia.objects.create(usuario=perfil, incidencia_id=incidencia_id, tipo_id=tipo_id)
+            count = ReaccionIncidencia.objects.filter(incidencia_id=incidencia_id).count()
+            liked = ReaccionIncidencia.objects.filter(incidencia_id=incidencia_id, usuario=perfil).exists()
+            return Response({'created': True, 'count': count, 'liked_by_me': liked}, status=status.HTTP_201_CREATED)
+
 
 class ReporteViewSet(viewsets.ModelViewSet):
     queryset = Reporte.objects.all().order_by('-fecha_reporte')

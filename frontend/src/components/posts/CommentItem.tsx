@@ -8,6 +8,7 @@ type Comment = {
   text: string
   time?: string
   likes?: number
+  liked_by_me?: boolean
 }
 const CommentItem: React.FC<{ comment: Comment, onLike?: (id: number) => void }> = ({ comment, onLike }) => {
   return (
@@ -23,7 +24,7 @@ const CommentItem: React.FC<{ comment: Comment, onLike?: (id: number) => void }>
         </div>
         <div className="flex items-center gap-4 mt-2 ml-3">
           <div className="flex items-center gap-1 text-slate-500">
-            <button onClick={() => onLike && onLike(comment.id)} className="hover:text-primary transition-colors flex items-center gap-1">
+            <button onClick={() => onLike && onLike(comment.id)} className={`transition-colors flex items-center gap-1 ${comment.liked_by_me ? 'text-primary' : 'hover:text-primary'}`}>
               <ThumbsUp size={16} />
             </button>
             <span className="text-xs font-semibold">{comment.likes || 0}</span>

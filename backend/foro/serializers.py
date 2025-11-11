@@ -334,13 +334,31 @@ class IncidenciaModalSerializer(serializers.ModelSerializer):
                     avatar = request.build_absolute_uri(usuario.foto.url) if (request and usuario.foto) else (usuario.foto.url if usuario.foto else '/static/img/profile.jpg')
                 except Exception:
                     avatar = usuario.foto.url if getattr(usuario, 'foto', None) else '/static/img/profile.jpg'
+            # compute likes count and whether the requesting user liked this comment
+            try:
+                request = self.context.get('request') if hasattr(self, 'context') else None
+                perfil = getattr(request.user, 'perfil', None) if request and hasattr(request, 'user') else None
+            except Exception:
+                perfil = None
+            likes_count = 0
+            liked_by_me = False
+            try:
+                from .models import ReaccionComentario
+                likes_count = ReaccionComentario.objects.filter(comentario_id=c.id).count()
+                if perfil:
+                    liked_by_me = ReaccionComentario.objects.filter(comentario_id=c.id, usuario=perfil).exists()
+            except Exception:
+                # defensive: if model not present or DB error, leave defaults
+                pass
+
             out.append({
                 'id': c.id,
                 'author': author or 'Usuario anónimo',
                 'avatar': avatar or '/static/img/profile.jpg',
                 'text': c.contenido,
                 'time': c.fecha_creacion,
-                'likes': 0,
+                'likes': likes_count,
+                'liked_by_me': liked_by_me,
             })
         return out
 
