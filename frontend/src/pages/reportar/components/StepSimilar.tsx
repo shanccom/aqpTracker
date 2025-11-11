@@ -3,6 +3,8 @@ import foroService from '../../../services/foroService'
 import PostCard from '../../../components/posts/PostCard'
 import PostModal from '../../../components/posts/PostModal'
 import { AlertTriangle, CheckCircle, Loader } from 'lucide-react'
+import { useCallback } from 'react'
+import { useAuth } from '../../../components/auth/AuthProvider'
 
 type Props = {
   data: any
@@ -14,6 +16,24 @@ export default function StepSimilar({ data, onBack, onNext }: Props) {
   const [loading, setLoading] = useState(false)
   const [similares, setSimilares] = useState<any[]>([])
   const [selected, setSelected] = useState<any | null>(null)
+  const [tiposReaccion, setTiposReaccion] = useState<any[]>([])
+
+  const { user } = useAuth()
+
+  useEffect(() => {
+    let mounted = true
+    const loadTipos = async () => {
+      try {
+        const tipos = await foroService.listTipoReacciones()
+        if (!mounted) return
+        setTiposReaccion(Array.isArray(tipos) ? tipos : (tipos.results ?? []))
+      } catch (e) {
+        // ignore
+      }
+    }
+    loadTipos()
+    return () => { mounted = false }
+  }, [])
 
   useEffect(() => {
     function normalizeArray(arr: any[]) {
@@ -51,6 +71,61 @@ export default function StepSimilar({ data, onBack, onNext }: Props) {
     }
     load()
   }, [data.latlng, data.titulo, data.similares])
+
+  const handleLike = useCallback(async (postId: number) => {
+    if (!user) return
+    const tipo = tiposReaccion.find((t: any) => (t.nombre || '').toLowerCase().includes('me gusta')) || tiposReaccion[0]
+    if (!tipo) return
+    try {
+      const reacs: any[] = await foroService.listReacciones({ incidencia: postId, tipo: tipo.id })
+      const mine = reacs.find(r => {
+        if (!r.usuario) return false
+        try {
+          if (user && (user as any).id && r.usuario.id) return r.usuario.id === (user as any).id
+          if (user && (user as any).email && r.usuario.email) return r.usuario.email === (user as any).email
+        } catch (e) {
+          return false
+        }
+        return false
+      })
+      if (mine) {
+        await foroService.deleteReaccion(mine.id)
+        setSimilares(prev => prev.map(p => p.id === postId ? { ...p, reacciones: Math.max(0, (p.reacciones ?? 0) - 1) } : p))
+      } else {
+        await foroService.createReaccion(postId, tipo.id)
+        setSimilares(prev => prev.map(p => p.id === postId ? { ...p, reacciones: (p.reacciones ?? 0) + 1 } : p))
+      }
+    } catch (err) {
+      try {
+        const params: any = {}
+        if (data.latlng) { params.lat = data.latlng.lat; params.lng = data.latlng.lng; params.radius = 0.5 }
+        if (data.titulo) params.q = data.titulo
+        if (data.distrito) params.district = data.distrito
+        const res = await foroService.previewIncidencias(params)
+        setSimilares(res || [])
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [tiposReaccion, user, data.latlng, data.titulo, data.distrito])
+
+  const handleApoyar = useCallback(async (postId: number) => {
+    try {
+      await foroService.createReporte(postId)
+      setSimilares(prev => prev.map(p => p.id === postId ? { ...p, reports_count: (p.reports_count ?? 0) + 1, apoyos_count: (p.apoyos_count ?? 0) + 1, reported_by_me: true } : p))
+    } catch (err) {
+      try {
+        const params: any = {}
+        if (data.latlng) { params.lat = data.latlng.lat; params.lng = data.latlng.lng; params.radius = 0.5 }
+        if (data.titulo) params.q = data.titulo
+        if (data.distrito) params.district = data.distrito
+        const res = await foroService.previewIncidencias(params)
+        setSimilares(res || [])
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [data.latlng, data.titulo, data.distrito])
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
@@ -116,7 +191,7 @@ export default function StepSimilar({ data, onBack, onNext }: Props) {
                       className="cursor-pointer hover:shadow-md transition-shadow duration-200 rounded-lg"
                       onClick={() => setSelected(s)}
                     >
-                      <PostCard post={s} onOpen={() => setSelected(s)} />
+                      <PostCard post={s} onOpen={() => setSelected(s)} onLike={handleLike} onApoyar={handleApoyar} />
                     </div>
                   ))}
                 </div>
@@ -147,6 +222,8 @@ export default function StepSimilar({ data, onBack, onNext }: Props) {
         <PostModal 
           post={selected} 
           onClose={() => setSelected(null)} 
+          onLike={handleLike}
+          onApoyar={handleApoyar}
         />
       )}
     </div>
