@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { CheckCircle } from 'lucide-react'
+import api from '../../../api/axios'
 
 type Props = {
   data: any
@@ -10,8 +11,33 @@ export default function StepDetails({ data, onNext }: Props) {
   const [titulo, setTitulo] = useState(data.titulo || '')
   const [descripcion, setDescripcion] = useState(data.descripcion || '')
   const [distrito, setDistrito] = useState(data.distrito || '')
+  const [distritosList, setDistritosList] = useState<Array<any>>([])
+  const [loadingDistritos, setLoadingDistritos] = useState(false)
+  const [distritosError, setDistritosError] = useState<string | null>(null)
 
   const canNext = titulo.trim().length >= 5 && descripcion.trim().length >= 10 && distrito
+
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      setLoadingDistritos(true)
+      setDistritosError(null)
+      try {
+        const res = await api.get('/api/foro/distritos/')
+        if (!mounted) return
+        setDistritosList(res.data || [])
+      } catch (err) {
+        console.error('Error cargando distritos', err)
+        if (!mounted) return
+        setDistritosError('Error cargando distritos')
+      } finally {
+        if (!mounted) return
+        setLoadingDistritos(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
@@ -86,15 +112,14 @@ export default function StepDetails({ data, onNext }: Props) {
             onChange={e => setDistrito(e.target.value)} 
             className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-green-600 transition-all duration-200 appearance-none"
           >
-            <option value="">Seleccione un distrito</option>
-            <option>Miraflores</option>
-            <option>San Isidro</option>
-            <option>Surco</option>
-            <option>La Molina</option>
-            <option>Barranco</option>
-            <option>Centro de Lima</option>
-            <option>Lince</option>
-            <option>Jesús María</option>
+            <option value="">{loadingDistritos ? 'Cargando distritos...' : 'Seleccione un distrito'}</option>
+            {distritosError && (
+              <option value="" disabled>{distritosError}</option>
+            )}
+            {distritosList.map(d => (
+              // usamos el nombre como valor para mantener compatibilidad con el resto del código
+              <option key={d.id} value={d.nombre}>{d.nombre}</option>
+            ))}
           </select>
         </div>
 
