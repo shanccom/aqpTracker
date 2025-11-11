@@ -10,11 +10,11 @@ type Comment = {
   likes?: number
 }
 
-const CommentsList: React.FC<{ comments: Comment[] }> = ({ comments }) => {
+const CommentsList: React.FC<{ comments: Comment[], onLike?: (id: number) => void }> = ({ comments, onLike }) => {
   return (
     <div className="space-y-6">
       {comments.map(c => (
-        <CommentItem key={c.id} comment={c} />
+        <CommentItem key={c.id} comment={c} onLike={onLike} />
       ))}
     </div>
   )

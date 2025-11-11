@@ -79,19 +79,37 @@ class Comentario(models.Model):
         return f"Comentario de {self.usuario.user.email} en {self.incidencia.titulo}"
 
 
-class Reaccion(models.Model):
+
+class ReaccionIncidencia(models.Model):
+    """Reacción dirigida a una Incidencia (post)."""
     usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE)
-    incidencia = models.ForeignKey(Incidencia, on_delete=models.CASCADE, related_name='reacciones', null=True, blank=True)
-    comentario = models.ForeignKey(Comentario, on_delete=models.CASCADE, related_name='reacciones', null=True, blank=True)
+    incidencia = models.ForeignKey(Incidencia, on_delete=models.CASCADE, related_name='reacciones')
     tipo = models.ForeignKey(TipoReaccion, on_delete=models.CASCADE)
     fecha = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('usuario', 'incidencia', 'comentario', 'tipo')
+        verbose_name = 'Reacción a incidencia'
+        verbose_name_plural = 'Reacciones a incidencias'
+        unique_together = ('usuario', 'incidencia', 'tipo')
 
     def __str__(self):
-        target = self.incidencia or self.comentario
-        return f"{self.usuario.user.email} → {self.tipo.nombre} ({target})"
+        return f"{self.usuario.user.email} → {self.tipo.nombre} (Incidencia {self.incidencia_id})"
+
+
+class ReaccionComentario(models.Model):
+    """Reacción dirigida a un Comentario."""
+    usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE)
+    comentario = models.ForeignKey(Comentario, on_delete=models.CASCADE, related_name='reacciones')
+    tipo = models.ForeignKey(TipoReaccion, on_delete=models.CASCADE)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Reacción a comentario'
+        verbose_name_plural = 'Reacciones a comentarios'
+        unique_together = ('usuario', 'comentario', 'tipo')
+
+    def __str__(self):
+        return f"{self.usuario.user.email} → {self.tipo.nombre} (Comentario {self.comentario_id})"
 
 class Notificacion(models.Model):
     usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE, related_name='notificaciones')

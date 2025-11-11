@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Distrito, Estado, Incidencia, Reporte, TipoReaccion, Comentario, Reaccion, Notificacion, IncidenciaImagen
+from .models import (
+    Distrito, Estado, Incidencia, Reporte, TipoReaccion,
+    Comentario, ReaccionIncidencia, ReaccionComentario, Notificacion, IncidenciaImagen
+)
 from usuario.models import Perfil
 
 
@@ -57,19 +60,69 @@ class TipoReaccionSerializer(serializers.ModelSerializer):
         fields = ['id', 'nombre', 'emoji', 'descripcion']
 
 
-class ReaccionSerializer(serializers.ModelSerializer):
+class ReaccionIncidenciaSerializer(serializers.ModelSerializer):
     usuario = PerfilMinSerializer(read_only=True)
-    tipo = serializers.PrimaryKeyRelatedField(queryset=TipoReaccion.objects.all(), write_only=False)
-
-    def to_representation(self, instance):
-        # Use nested representation for tipo on output
-        rep = super().to_representation(instance)
-        rep['tipo'] = TipoReaccionSerializer(instance.tipo).data if instance.tipo else None
-        return rep
+    tipo = TipoReaccionSerializer(read_only=True)
 
     class Meta:
-        model = Reaccion
-        fields = ['id', 'usuario', 'incidencia', 'comentario', 'tipo', 'fecha']
+        model = ReaccionIncidencia
+        fields = ['id', 'usuario', 'incidencia', 'tipo', 'fecha']
+
+
+class ReaccionComentarioSerializer(serializers.ModelSerializer):
+    usuario = PerfilMinSerializer(read_only=True)
+    tipo = TipoReaccionSerializer(read_only=True)
+
+    class Meta:
+        model = ReaccionComentario
+        fields = ['id', 'usuario', 'comentario', 'tipo', 'fecha']
+
+
+class ReaccionSerializer(serializers.Serializer):
+    """Facade serializer that accepts (incidencia|comentario) + tipo and creates the proper model.
+
+    The API keeps the same endpoints as before (/reacciones/) but behind the scenes we
+    persist into separate tables for incidencia vs comentario.
+    """
+    id = serializers.IntegerField(read_only=True)
+    usuario = PerfilMinSerializer(read_only=True)
+    tipo = serializers.PrimaryKeyRelatedField(queryset=TipoReaccion.objects.all(), write_only=True)
+    incidencia = serializers.PrimaryKeyRelatedField(queryset=Incidencia.objects.all(), required=False, allow_null=True)
+    comentario = serializers.PrimaryKeyRelatedField(queryset=Comentario.objects.all(), required=False, allow_null=True)
+    fecha = serializers.DateTimeField(read_only=True)
+
+    def validate(self, attrs):
+        inc = attrs.get('incidencia')
+        com = attrs.get('comentario')
+        if bool(inc) == bool(com):
+            raise serializers.ValidationError('Debe especificar exactamente una de "incidencia" o "comentario".')
+        return attrs
+
+    def create(self, validated_data):
+        # 'usuario' will be injected by the view (perform_create)
+        usuario = validated_data.pop('usuario', None) or self.context.get('usuario')
+        tipo = validated_data.get('tipo')
+        incidencia = validated_data.get('incidencia', None)
+        comentario = validated_data.get('comentario', None)
+        if incidencia is not None:
+            # create ReaccionIncidencia
+            obj, created = ReaccionIncidencia.objects.get_or_create(usuario=usuario, incidencia=incidencia, tipo=tipo)
+            return obj
+        else:
+            obj, created = ReaccionComentario.objects.get_or_create(usuario=usuario, comentario=comentario, tipo=tipo)
+            return obj
+
+    def to_representation(self, instance):
+        # instance may be ReaccionIncidencia or ReaccionComentario
+        if isinstance(instance, ReaccionIncidencia):
+            return ReaccionIncidenciaSerializer(instance, context=self.context).data
+        if isinstance(instance, ReaccionComentario):
+            return ReaccionComentarioSerializer(instance, context=self.context).data
+        # fallback: try both
+        try:
+            return ReaccionIncidenciaSerializer(instance, context=self.context).data
+        except Exception:
+            return ReaccionComentarioSerializer(instance, context=self.context).data
 
 
 class IncidenciaSerializer(serializers.ModelSerializer):

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
 	Distrito, Estado, Incidencia, Reporte,
-	TipoReaccion, Comentario, Reaccion, Notificacion, IncidenciaImagen
+	TipoReaccion, Comentario, ReaccionIncidencia, ReaccionComentario, Notificacion, IncidenciaImagen
 )
 
 
@@ -54,11 +54,18 @@ class ComentarioAdmin(admin.ModelAdmin):
 	autocomplete_fields = ('usuario', 'incidencia', 'respuesta_a')
 
 
-@admin.register(Reaccion)
-class ReaccionAdmin(admin.ModelAdmin):
-	list_display = ('id', 'usuario', 'tipo', 'incidencia', 'comentario', 'fecha')
+@admin.register(ReaccionIncidencia)
+class ReaccionIncidenciaAdmin(admin.ModelAdmin):
+	list_display = ('id', 'usuario', 'tipo', 'incidencia', 'fecha')
 	search_fields = ('usuario__user__email', 'tipo__nombre')
-	autocomplete_fields = ('usuario', 'incidencia', 'comentario')
+	autocomplete_fields = ('usuario', 'incidencia')
+
+
+@admin.register(ReaccionComentario)
+class ReaccionComentarioAdmin(admin.ModelAdmin):
+	list_display = ('id', 'usuario', 'tipo', 'comentario', 'fecha')
+	search_fields = ('usuario__user__email', 'tipo__nombre')
+	autocomplete_fields = ('usuario', 'comentario')
 
 
 @admin.register(Notificacion)

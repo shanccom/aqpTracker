@@ -22,6 +22,7 @@ type Post = {
   imagenes?: Array<{ id: number; url: string }>
   distrito?: string
   direccion?: string | null
+  reported_by_me?: boolean
 }
 
 const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComments?: any[], onLike?: (id: number) => void, onApoyar?: (id: number) => void }> = ({ post, onClose, initialComments = [], onLike, onApoyar }) => {
@@ -48,8 +49,62 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
     : (post.autor || '')
 
   const addComment = (text: string) => {
-    const next = [{ id: Date.now(), author: 'Tú', text, time: 'ahora', likes: 0 }, ...comments]
-    setComments(next)
+    // POST the comment to backend then update UI with the returned comment
+    (async () => {
+      try {
+        const payload = { incidencia: post.id, contenido: text }
+        const res = await api.post('/api/foro/comentarios/', payload)
+        const created = res.data
+        // map backend comment to UI shape expected by CommentsList
+        const usuario = created.usuario || null
+        const author = usuario ? (usuario.first_name || usuario.email || 'Usuario') : 'Tú'
+        const avatar = usuario ? (usuario.foto || '/static/img/profile.jpg') : '/static/img/profile.jpg'
+        const mapped = {
+          id: created.id,
+          author,
+          avatar,
+          text: created.contenido || created.body || text,
+          time: created.fecha_creacion || 'ahora',
+          likes: 0
+        }
+        setComments(prev => [mapped, ...(prev || [])])
+      } catch (err) {
+        // fallback to optimistic local comment if request fails
+        const next = [{ id: Date.now(), author: 'Tú', text, time: 'ahora', likes: 0 }, ...comments]
+        setComments(next)
+      }
+    })()
+  }
+
+  // load default reaction type to use when liking a comment
+  const [defaultTipoId, setDefaultTipoId] = useState<number | null>(null)
+  useEffect(() => {
+    let mounted = true
+    async function loadTipos() {
+      try {
+        const res = await api.get('/api/foro/tiporeacciones/')
+        const data = res.data || []
+        if (!mounted) return
+        // prefer one with 'me gusta' in the name
+        const found = (data || []).find((t: any) => (t.nombre || '').toLowerCase().includes('me gusta'))
+        setDefaultTipoId(found ? found.id : (data[0] ? data[0].id : null))
+      } catch (e) {
+        // ignore
+      }
+    }
+    loadTipos()
+    return () => { mounted = false }
+  }, [])
+
+  const handleCommentLike = async (commentId: number) => {
+    if (!defaultTipoId) return
+    try {
+      await api.post('/api/foro/reacciones/', { comentario: commentId, tipo: defaultTipoId })
+      // update likes locally
+      setComments(prev => (prev || []).map((c: any) => c.id === commentId ? { ...c, likes: (c.likes || 0) + 1 } : c))
+    } catch (e) {
+      // ignore for now (could show toast)
+    }
   }
 
   useEffect(() => {
@@ -75,9 +130,14 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
     async function fetchDetail() {
       if (!post) return
       try {
-        const res = await api.get(`/api/foro/incidencias/${post.id}/`)
+        // fetch UI-shaped payload intended for the modal (includes mapped comentarios)
+        const res = await api.get(`/api/foro/incidencias_modal/${post.id}/`)
         if (!mounted) return
         setFullPost(res.data)
+        // if the modal-shaped payload includes comentarios in UI shape, use them
+        if (res.data && Array.isArray(res.data.comentarios)) {
+          setComments(res.data.comentarios)
+        }
       } catch (e) {
         // ignore - we can render with preview
       }
@@ -85,6 +145,12 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
     fetchDetail()
     return () => { mounted = false }
   }, [post?.id])
+
+  // keep comments in sync when fullPost changes
+  useEffect(() => {
+    if (!fullPost) return
+    if (Array.isArray(fullPost.comentarios)) setComments(fullPost.comentarios)
+  }, [fullPost])
 
   // build images list (main image + additional images)
   const images: string[] = useMemo(() => {
@@ -331,7 +397,7 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
           {/* Comentarios */}
           <div className="mb-4">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Comentarios</h2>
-            <CommentsList comments={comments} />
+            <CommentsList comments={comments} onLike={handleCommentLike} />
             <NewCommentBox onAdd={addComment} />
           </div>
         </div>

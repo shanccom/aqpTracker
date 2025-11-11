@@ -9,8 +9,7 @@ type Comment = {
   time?: string
   likes?: number
 }
-
-const CommentItem: React.FC<{ comment: Comment }> = ({ comment }) => {
+const CommentItem: React.FC<{ comment: Comment, onLike?: (id: number) => void }> = ({ comment, onLike }) => {
   return (
     <div className="flex items-start gap-3">
       <img alt={`Avatar de ${comment.author}`} className="w-10 h-10 rounded-full" src={comment.avatar || '/static/img/profile.jpg'} />
@@ -24,7 +23,7 @@ const CommentItem: React.FC<{ comment: Comment }> = ({ comment }) => {
         </div>
         <div className="flex items-center gap-4 mt-2 ml-3">
           <div className="flex items-center gap-1 text-slate-500">
-            <button className="hover:text-primary transition-colors flex items-center gap-1">
+            <button onClick={() => onLike && onLike(comment.id)} className="hover:text-primary transition-colors flex items-center gap-1">
               <ThumbsUp size={16} />
             </button>
             <span className="text-xs font-semibold">{comment.likes || 0}</span>

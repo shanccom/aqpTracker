@@ -2,7 +2,10 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.decorators import action
-from .models import Distrito, Estado, Incidencia, Reporte, TipoReaccion, Comentario, Reaccion, Notificacion, IncidenciaImagen
+from .models import (
+    Distrito, Estado, Incidencia, Reporte, TipoReaccion,
+    Comentario, ReaccionIncidencia, ReaccionComentario, Notificacion, IncidenciaImagen
+)
 from .serializers import (
     DistritoSerializer, EstadoSerializer, IncidenciaSerializer,
     ReporteSerializer, TipoReaccionSerializer, ComentarioSerializer,
@@ -142,17 +145,66 @@ class ComentarioViewSet(viewsets.ModelViewSet):
         serializer.save(usuario=perfil)
 
 
-class ReaccionViewSet(viewsets.ModelViewSet):
-    queryset = Reaccion.objects.all().order_by('-fecha')
-    serializer_class = ReaccionSerializer
+class ReaccionViewSet(viewsets.ViewSet):
+    """Compatibility viewset for reactions.
+
+    The frontend continues to use the single `/reacciones/` endpoint. Under the hood
+    we store reactions in separate tables for incidencias and comentarios.
+    """
     permission_classes = [IsAuthenticatedOrReadOnly]
 
-    def perform_create(self, serializer):
-        perfil = getattr(self.request.user, 'perfil', None)
+    def list(self, request):
+        # support filtering by incidencia or comentario and/or tipo
+        incidencia_id = request.query_params.get('incidencia')
+        comentario_id = request.query_params.get('comentario')
+        tipo = request.query_params.get('tipo')
+        results = []
+        if incidencia_id:
+            qs = ReaccionIncidencia.objects.filter(incidencia_id=incidencia_id)
+            if tipo:
+                qs = qs.filter(tipo_id=tipo)
+            qs = qs.order_by('-fecha')
+            results = list(qs)
+        elif comentario_id:
+            qs = ReaccionComentario.objects.filter(comentario_id=comentario_id)
+            if tipo:
+                qs = qs.filter(tipo_id=tipo)
+            qs = qs.order_by('-fecha')
+            results = list(qs)
+        else:
+            # combined recent reactions from both tables
+            qs1 = ReaccionIncidencia.objects.all()
+            qs2 = ReaccionComentario.objects.all()
+            results = sorted(list(qs1) + list(qs2), key=lambda x: x.fecha, reverse=True)
+        serializer = ReaccionSerializer(results, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def create(self, request):
+        perfil = getattr(request.user, 'perfil', None)
         if not perfil:
             from usuario.models import Perfil as PerfilModel
-            perfil = PerfilModel.objects.filter(user=self.request.user).first()
-        serializer.save(usuario=perfil)
+            perfil = PerfilModel.objects.filter(user=request.user).first()
+        data = request.data.copy()
+        serializer = ReaccionSerializer(data=data, context={'request': request, 'usuario': perfil})
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save()
+        return Response(ReaccionSerializer(obj, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, pk=None):
+        # try to remove from either table
+        from django.shortcuts import get_object_or_404
+        try:
+            obj = ReaccionIncidencia.objects.filter(pk=pk).first()
+            if obj:
+                obj.delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            obj2 = ReaccionComentario.objects.filter(pk=pk).first()
+            if obj2:
+                obj2.delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            return Response({'detail': 'Error deleting reaction.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ReporteViewSet(viewsets.ModelViewSet):
