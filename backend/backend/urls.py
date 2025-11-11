@@ -11,7 +11,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('rutas.urls')),
+    path('api/rutas/', include('rutas.urls')),
     path('api/usuario/', include('usuario.urls')),
     # Use the app-provided LoginView which sets the custom serializer that accepts `email`.
     path('api/token/', LoginView.as_view(), name='token_obtain_pair'),
