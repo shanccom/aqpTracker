@@ -11,7 +11,6 @@ class Command(BaseCommand):
 
     PARADEROS_POPULARES = [
         {'nombre': 'Plaza de Armas', 'lat': -16.3989, 'lng': -71.5370, 'popular': True},
-        {'nombre': 'Parque Mayta Cápac', 'lat': -16.4067, 'lng': -71.5228, 'popular': True},
         {'nombre': 'Terminal Terrestre', 'lat': -16.4298, 'lng': -71.5192, 'popular': True},
         {'nombre': 'Mercado San Camilo', 'lat': -16.4024, 'lng': -71.5369, 'popular': True},
         {'nombre': 'Parque Selva Alegre', 'lat': -16.4186, 'lng': -71.5271, 'popular': True},

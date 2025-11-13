@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ArrowLeft, MapPin, Star, Navigation, ArrowRight, Info } from 'lucide-react';
-
+import { ArrowLeft, MapPin, Navigation, ArrowRight,  } from 'lucide-react';
 // Fix para los iconos de Leaflet
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -142,34 +141,6 @@ const RutaDetail = ({ rutaId, onBack }: RutaDetailProps) => {
     }
   }, [rutaCompleta, tipoActivo]);
 
-  const decodePolyline = (encoded: string): [number, number][] => {
-    const points: [number, number][] = [];
-    let index = 0, lat = 0, lng = 0;
-
-    while (index < encoded.length) {
-      let b, shift = 0, result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      const dlat = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
-      lat += dlat;
-
-      shift = 0;
-      result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      const dlng = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
-      lng += dlng;
-
-      points.push([lat / 1e5, lng / 1e5]);
-    }
-    return points;
-  };
 
   if (loading) {
     return (
