@@ -18,6 +18,9 @@ class Command(BaseCommand):
         {'nombre': 'Cerro Colorado', 'lat': -16.3656, 'lng': -71.5625, 'popular': True},
         {'nombre': 'Paucarpata', 'lat': -16.4324, 'lng': -71.4923, 'popular': True},
         {'nombre': 'Cayma', 'lat': -16.3727, 'lng': -71.5470, 'popular': True},
+        {'nombre': 'UNSA Medicina', 'lat': -16.41244, 'lng': -71.53511, 'popular': True},
+        {'nombre': 'UNSA Ingeniería', 'lat': -16.40274, 'lng': -71.52546, 'popular': True},
+        {'nombre': 'Mariscal Castilla', 'lat': -16.39942, 'lng': -71.52157, 'popular': True},
     ]
 
     def calcular_distancia(self, lat1, lng1, lat2, lng2):
