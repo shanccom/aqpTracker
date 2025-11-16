@@ -1,66 +1,104 @@
-import { MapContainer, TileLayer, Polyline, Marker, Popup } from "react-leaflet";
-import { useEffect, useState } from "react";
-import axios from "axios";
-import "leaflet/dist/leaflet.css";
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 
-// Tipos para tu API
-interface PuntoRuta {
-  latitud: number;
-  longitud: number;
-  orden: number;
-}
-
-interface Ruta {
+interface RutaData {
   id: number;
   nombre: string;
-  descripcion?: string;
-  puntos: PuntoRuta[];
+  origen: string;
+  destino: string;
+  // Agrega más campos según necesites
 }
 
-export default function MapaRuta() {
-  const [ruta, setRuta] = useState<Ruta | null>(null);
+const MapaRuta: React.FC = () => {
+  const [rutaData, setRutaData] = useState<RutaData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    axios
-      .get<Ruta>("http://localhost:8000/api/rutas/1/")
-      .then((res) => setRuta(res.data))
-      .catch((err) => console.error("Error al cargar la ruta:", err));
+    const fetchRuta = async () => {
+      try {
+        // DATOS MOCK TEMPORALES - Comenta la petición real
+        // const response = await axios.get('http://127.0.0.1:8000/api/rutas/1/');
+        // setRutaData(response.data);
+        
+        // Simulamos un delay como si fuera una petición real
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Datos de prueba
+        const mockData: RutaData = {
+          id: 1,
+          nombre: "Ruta Arequipa Centro",
+          origen: "Plaza de Armas",
+          destino: "Yanahuara",
+          // Agrega más datos según tu estructura
+        };
+        
+        setRutaData(mockData);
+        setLoading(false);
+        
+      } catch (error) {
+        console.error('Error al cargar la ruta:', error);
+        setError('Error cargando los datos');
+        setLoading(false);
+        
+        // En caso de error, también usamos datos mock
+        const mockData: RutaData = {
+          id: 1,
+          nombre: "Ruta de Prueba (Fallback)",
+          origen: "Punto A",
+          destino: "Punto B",
+        };
+        setRutaData(mockData);
+      }
+    };
+
+    fetchRuta();
   }, []);
 
-  if (!ruta) return <p className="text-center mt-4">Cargando ruta...</p>;
+  if (loading) {
+    return <div>Cargando ruta...</div>;
+  }
 
-  const puntos: [number, number][] = ruta.puntos.map((p) => [p.latitud, p.longitud]);
+  if (error) {
+    return (
+      <div>
+        <div>Error: {error}</div>
+        {rutaData && (
+          <div>
+            <h3>Usando datos de prueba:</h3>
+            <p>Nombre: {rutaData.nombre}</p>
+            <p>Origen: {rutaData.origen}</p>
+            <p>Destino: {rutaData.destino}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full h-screen">
-      {/* Se fuerzan los tipos genéricos para evitar conflictos */}
-      <MapContainer
-        center={puntos[0] as [number, number]}
-        zoom={13}
-        className="w-full h-full rounded-lg shadow-lg"
-      >
-        {/* TileLayer */}
-        <TileLayer
-          // @ts-ignore → forzamos porque los tipos actuales de react-leaflet están incompletos
-          attribution="© OpenStreetMap"
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-
-        {/* Polyline */}
-        <Polyline
-          // @ts-ignore
-          positions={puntos}
-          pathOptions={{ color: "red", weight: 4 }}
-        />
-
-        <Marker position={puntos[0]}>
-          <Popup>Punto de inicio</Popup>
-        </Marker>
-
-        <Marker position={puntos[puntos.length - 1]}>
-          <Popup>Destino final</Popup>
-        </Marker>
-      </MapContainer>
+    <div>
+      <h2>Mapa de Ruta</h2>
+      {rutaData && (
+        <div>
+          <h3>{rutaData.nombre}</h3>
+          <p>Origen: {rutaData.origen}</p>
+          <p>Destino: {rutaData.destino}</p>
+          {/* Aquí irá tu mapa */}
+          <div style={{ 
+            width: '100%', 
+            height: '400px', 
+            backgroundColor: '#f0f0f0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid #ccc'
+          }}>
+            Mapa se mostrará aquí (usando datos de prueba)
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default MapaRuta;
