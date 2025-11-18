@@ -1,6 +1,10 @@
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from .models import Empresa, Ruta, Recorrido, Paradero, RecorridoParadero
+#Algoritmo rutas
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from .utils import calcular_distancia
 
 def empresas_list(request):
     """API endpoint que lista todas las empresas"""
@@ -42,7 +46,6 @@ def recorrido_json(request, recorrido_id):
     
     return JsonResponse(data)
 
-
 def ruta_json(request, ruta_id):
     """API endpoint que devuelve ambos recorridos (IDA y VUELTA) de una ruta"""
     ruta = get_object_or_404(Ruta, id=ruta_id)
@@ -77,3 +80,55 @@ def ruta_json(request, ruta_id):
     }
     
     return JsonResponse(data)
+
+#Buscador rutas
+@api_view(['POST'])
+def buscar_rutas_view(request):
+    punto_a = request.data.get('punto_a') 
+    punto_b = request.data.get('punto_b')
+    
+    if not punto_a or not punto_b:
+        return Response({'error': 'Faltan las coordenadas de punto_a o punto_b'}, status=400)
+
+    # Radio de búsqueda ajustado a 500m (estándar razonable)
+    RADIO_METROS = 500  
+    
+    # 1. Filtrar paraderos cercanos
+    todos_paraderos = Paradero.objects.all()
+    ids_paraderos_cerca_a = []
+    ids_paraderos_cerca_b = []
+
+    for paradero in todos_paraderos:
+        coord_paradero = {'lat': paradero.latitud, 'lng': paradero.longitud}
+        
+        if calcular_distancia(punto_a, coord_paradero) <= RADIO_METROS:
+            ids_paraderos_cerca_a.append(paradero.id)
+            
+        if calcular_distancia(punto_b, coord_paradero) <= RADIO_METROS:
+            ids_paraderos_cerca_b.append(paradero.id)
+            
+    # 2. Buscar Recorridos
+    recorridos_a = Recorrido.objects.filter(
+        recorrido_paraderos__paradero_id__in=ids_paraderos_cerca_a
+    ).distinct()
+    
+    recorridos_b = Recorrido.objects.filter(
+        recorrido_paraderos__paradero_id__in=ids_paraderos_cerca_b
+    ).distinct()
+    
+    # 3. Intersección
+    recorridos_finales = recorridos_a & recorridos_b
+    
+    # 4. Respuesta JSON
+    respuesta = []
+    for rec in recorridos_finales:
+        respuesta.append({
+            'id': rec.id,
+            'nombre_ruta': rec.ruta.nombre,      
+            'empresa': rec.ruta.empresa.nombre,  
+            'sentido': rec.sentido,              
+            'color': rec.color_linea,
+            'coordenadas': rec.coordenadas,      
+        })
+        
+    return Response(respuesta)
