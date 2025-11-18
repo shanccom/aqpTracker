@@ -10,4 +10,6 @@ urlpatterns = [
     path('empresas/<int:empresa_id>/rutas/', views.empresa_rutas, name='empresa_rutas'), #TODAS LAS RUTAS DE UNA EMPRESA
     path('ruta/<int:ruta_id>/json/', views.ruta_json, name='ruta_json'), # RECORRIDO IDA Y VUELTA
     path('recorrido/<int:recorrido_id>/json/', views.recorrido_json, name='recorrido_json'), #SOLO UN RECORRIDO
+    #Algoritmo rutas
+    path('buscar-rutas/', views.buscar_rutas_view, name='buscar_rutas'),
 ]
