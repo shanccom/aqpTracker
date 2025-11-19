@@ -20,7 +20,9 @@ class Incidencia(models.Model):
     usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE, related_name='incidencias') 
     titulo = models.CharField(max_length=120)
     descripcion = models.TextField()
-    imagen = models.ImageField(upload_to='incidencias/', blank=True, null=True)
+    # dirección textual opcional (ej: "Calle X #123")
+    direccion = models.CharField(max_length=255, blank=True, null=True)
+    #imagen = models.ImageField(upload_to='incidencias/', blank=True, null=True)
     distrito = models.ForeignKey(Distrito, on_delete=models.SET_NULL, null=True, blank=True)
     latitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -32,6 +34,18 @@ class Incidencia(models.Model):
 
     def __str__(self):
         return f"{self.titulo} ({self.usuario.user.email})"  # email como username
+
+
+class IncidenciaImagen(models.Model):
+    incidencia = models.ForeignKey(Incidencia, on_delete=models.CASCADE, related_name='imagenes')
+    imagen = models.ImageField(upload_to='incidencias/')
+    orden = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+
+    def __str__(self):
+        return f"Imagen {self.id} de {self.incidencia.titulo}"
 
 class Reporte(models.Model):
     usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE)
@@ -65,19 +79,37 @@ class Comentario(models.Model):
         return f"Comentario de {self.usuario.user.email} en {self.incidencia.titulo}"
 
 
-class Reaccion(models.Model):
+
+class ReaccionIncidencia(models.Model):
+    """Reacción dirigida a una Incidencia (post)."""
     usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE)
-    incidencia = models.ForeignKey(Incidencia, on_delete=models.CASCADE, related_name='reacciones', null=True, blank=True)
-    comentario = models.ForeignKey(Comentario, on_delete=models.CASCADE, related_name='reacciones', null=True, blank=True)
+    incidencia = models.ForeignKey(Incidencia, on_delete=models.CASCADE, related_name='reacciones')
     tipo = models.ForeignKey(TipoReaccion, on_delete=models.CASCADE)
     fecha = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('usuario', 'incidencia', 'comentario', 'tipo')
+        verbose_name = 'Reacción a incidencia'
+        verbose_name_plural = 'Reacciones a incidencias'
+        unique_together = ('usuario', 'incidencia', 'tipo')
 
     def __str__(self):
-        target = self.incidencia or self.comentario
-        return f"{self.usuario.user.email} → {self.tipo.nombre} ({target})"
+        return f"{self.usuario.user.email} → {self.tipo.nombre} (Incidencia {self.incidencia_id})"
+
+
+class ReaccionComentario(models.Model):
+    """Reacción dirigida a un Comentario."""
+    usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE)
+    comentario = models.ForeignKey(Comentario, on_delete=models.CASCADE, related_name='reacciones')
+    tipo = models.ForeignKey(TipoReaccion, on_delete=models.CASCADE)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Reacción a comentario'
+        verbose_name_plural = 'Reacciones a comentarios'
+        unique_together = ('usuario', 'comentario', 'tipo')
+
+    def __str__(self):
+        return f"{self.usuario.user.email} → {self.tipo.nombre} (Comentario {self.comentario_id})"
 
 class Notificacion(models.Model):
     usuario = models.ForeignKey(Perfil, on_delete=models.CASCADE, related_name='notificaciones')

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
 	Distrito, Estado, Incidencia, Reporte,
-	TipoReaccion, Comentario, Reaccion, Notificacion
+	TipoReaccion, Comentario, ReaccionIncidencia, ReaccionComentario, Notificacion, IncidenciaImagen
 )
 
 
@@ -26,6 +26,14 @@ class IncidenciaAdmin(admin.ModelAdmin):
 	autocomplete_fields = ('usuario',)
 
 
+class IncidenciaImagenInline(admin.TabularInline):
+    model = IncidenciaImagen
+    extra = 1
+
+# attach inline to Incidencia admin
+IncidenciaAdmin.inlines = [IncidenciaImagenInline]
+
+
 @admin.register(Reporte)
 class ReporteAdmin(admin.ModelAdmin):
 	list_display = ('id', 'usuario', 'incidencia', 'fecha_reporte')
@@ -46,11 +54,18 @@ class ComentarioAdmin(admin.ModelAdmin):
 	autocomplete_fields = ('usuario', 'incidencia', 'respuesta_a')
 
 
-@admin.register(Reaccion)
-class ReaccionAdmin(admin.ModelAdmin):
-	list_display = ('id', 'usuario', 'tipo', 'incidencia', 'comentario', 'fecha')
+@admin.register(ReaccionIncidencia)
+class ReaccionIncidenciaAdmin(admin.ModelAdmin):
+	list_display = ('id', 'usuario', 'tipo', 'incidencia', 'fecha')
 	search_fields = ('usuario__user__email', 'tipo__nombre')
-	autocomplete_fields = ('usuario', 'incidencia', 'comentario')
+	autocomplete_fields = ('usuario', 'incidencia')
+
+
+@admin.register(ReaccionComentario)
+class ReaccionComentarioAdmin(admin.ModelAdmin):
+	list_display = ('id', 'usuario', 'tipo', 'comentario', 'fecha')
+	search_fields = ('usuario__user__email', 'tipo__nombre')
+	autocomplete_fields = ('usuario', 'comentario')
 
 
 @admin.register(Notificacion)

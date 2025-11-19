@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Distrito, Estado, Incidencia, Reporte, TipoReaccion, Comentario, Reaccion, Notificacion
+from .models import (
+    Distrito, Estado, Incidencia, Reporte, TipoReaccion,
+    Comentario, ReaccionIncidencia, ReaccionComentario, Notificacion, IncidenciaImagen
+)
 from usuario.models import Perfil
 
 
@@ -57,19 +60,69 @@ class TipoReaccionSerializer(serializers.ModelSerializer):
         fields = ['id', 'nombre', 'emoji', 'descripcion']
 
 
-class ReaccionSerializer(serializers.ModelSerializer):
+class ReaccionIncidenciaSerializer(serializers.ModelSerializer):
     usuario = PerfilMinSerializer(read_only=True)
-    tipo = serializers.PrimaryKeyRelatedField(queryset=TipoReaccion.objects.all(), write_only=False)
-
-    def to_representation(self, instance):
-        # Use nested representation for tipo on output
-        rep = super().to_representation(instance)
-        rep['tipo'] = TipoReaccionSerializer(instance.tipo).data if instance.tipo else None
-        return rep
+    tipo = TipoReaccionSerializer(read_only=True)
 
     class Meta:
-        model = Reaccion
-        fields = ['id', 'usuario', 'incidencia', 'comentario', 'tipo', 'fecha']
+        model = ReaccionIncidencia
+        fields = ['id', 'usuario', 'incidencia', 'tipo', 'fecha']
+
+
+class ReaccionComentarioSerializer(serializers.ModelSerializer):
+    usuario = PerfilMinSerializer(read_only=True)
+    tipo = TipoReaccionSerializer(read_only=True)
+
+    class Meta:
+        model = ReaccionComentario
+        fields = ['id', 'usuario', 'comentario', 'tipo', 'fecha']
+
+
+class ReaccionSerializer(serializers.Serializer):
+    """Facade serializer that accepts (incidencia|comentario) + tipo and creates the proper model.
+
+    The API keeps the same endpoints as before (/reacciones/) but behind the scenes we
+    persist into separate tables for incidencia vs comentario.
+    """
+    id = serializers.IntegerField(read_only=True)
+    usuario = PerfilMinSerializer(read_only=True)
+    tipo = serializers.PrimaryKeyRelatedField(queryset=TipoReaccion.objects.all(), write_only=True)
+    incidencia = serializers.PrimaryKeyRelatedField(queryset=Incidencia.objects.all(), required=False, allow_null=True)
+    comentario = serializers.PrimaryKeyRelatedField(queryset=Comentario.objects.all(), required=False, allow_null=True)
+    fecha = serializers.DateTimeField(read_only=True)
+
+    def validate(self, attrs):
+        inc = attrs.get('incidencia')
+        com = attrs.get('comentario')
+        if bool(inc) == bool(com):
+            raise serializers.ValidationError('Debe especificar exactamente una de "incidencia" o "comentario".')
+        return attrs
+
+    def create(self, validated_data):
+        # 'usuario' will be injected by the view (perform_create)
+        usuario = validated_data.pop('usuario', None) or self.context.get('usuario')
+        tipo = validated_data.get('tipo')
+        incidencia = validated_data.get('incidencia', None)
+        comentario = validated_data.get('comentario', None)
+        if incidencia is not None:
+            # create ReaccionIncidencia
+            obj, created = ReaccionIncidencia.objects.get_or_create(usuario=usuario, incidencia=incidencia, tipo=tipo)
+            return obj
+        else:
+            obj, created = ReaccionComentario.objects.get_or_create(usuario=usuario, comentario=comentario, tipo=tipo)
+            return obj
+
+    def to_representation(self, instance):
+        # instance may be ReaccionIncidencia or ReaccionComentario
+        if isinstance(instance, ReaccionIncidencia):
+            return ReaccionIncidenciaSerializer(instance, context=self.context).data
+        if isinstance(instance, ReaccionComentario):
+            return ReaccionComentarioSerializer(instance, context=self.context).data
+        # fallback: try both
+        try:
+            return ReaccionIncidenciaSerializer(instance, context=self.context).data
+        except Exception:
+            return ReaccionComentarioSerializer(instance, context=self.context).data
 
 
 class IncidenciaSerializer(serializers.ModelSerializer):
@@ -78,27 +131,68 @@ class IncidenciaSerializer(serializers.ModelSerializer):
     estado = EstadoSerializer(read_only=True)
     comentarios = ComentarioSerializer(many=True, read_only=True)
     reacciones = ReaccionSerializer(many=True, read_only=True)
+    imagenes = serializers.SerializerMethodField()
+    reports_count = serializers.SerializerMethodField()
+    primer_reportero = serializers.SerializerMethodField()
 
     class Meta:
         model = Incidencia
         fields = [
-            'id', 'usuario', 'titulo', 'descripcion', 'imagen', 'distrito',
+            'id', 'usuario', 'titulo', 'descripcion', 'distrito',
+            'direccion',
             'latitud', 'longitud', 'estado', 'fecha_creacion', 'fecha_actualizacion',
-            'comentarios', 'reacciones'
+            'imagenes', 'reports_count', 'primer_reportero', 'comentarios', 'reacciones'
         ]
+
+    def get_imagenes(self, obj):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        imgs = []
+        for im in obj.imagenes.all():
+            try:
+                url = request.build_absolute_uri(im.imagen.url) if request else im.imagen.url
+            except Exception:
+                url = im.imagen.url
+            imgs.append({'id': im.id, 'url': url})
+        # fallback to legacy imagen field if no related images
+        legacy_imagen = getattr(obj, 'imagen', None)
+        if not imgs and legacy_imagen:
+            try:
+                url = request.build_absolute_uri(legacy_imagen.url) if request else legacy_imagen.url
+            except Exception:
+                url = legacy_imagen.url
+            imgs.append({'id': None, 'url': url})
+        return imgs
+
+    def get_reports_count(self, obj):
+        return obj.reporte_set.count()
+
+    def get_primer_reportero(self, obj):
+        first = obj.reporte_set.order_by('fecha_reporte').select_related('usuario').first()
+        if not first:
+            return None
+        return PerfilMinSerializer(first.usuario, context=self.context).data
 
 
 class IncidenciaMinSerializer(serializers.ModelSerializer):
     """Compact incidencia representation for lists (used inside Reporte list)."""
+    # include a minimal usuario representation so the frontend can show the owner
+    usuario = PerfilMinSerializer(read_only=True)
+    fecha_creacion = serializers.DateTimeField(read_only=True)
+    descripcion = serializers.SerializerMethodField()
     distrito = serializers.CharField(source='distrito.nombre', read_only=True)
     estado = serializers.CharField(source='estado.nombre', read_only=True)
     imagen = serializers.SerializerMethodField()
+    reports_count = serializers.SerializerMethodField()
     comentarios_count = serializers.SerializerMethodField()
     reacciones_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Incidencia
-        fields = ['id', 'titulo', 'imagen', 'distrito', 'estado', 'latitud', 'longitud', 'comentarios_count', 'reacciones_count']
+        fields = [
+            'id', 'titulo', 'imagen', 'descripcion', 'usuario', 'fecha_creacion',
+            'distrito', 'estado', 'direccion', 'latitud', 'longitud', 'comentarios_count',
+            'reacciones_count', 'reports_count'
+        ]
 
     def get_comentarios_count(self, obj):
         return obj.comentarios.count()
@@ -109,15 +203,44 @@ class IncidenciaMinSerializer(serializers.ModelSerializer):
     def get_imagen(self, obj):
         # return absolute URL for image, or a default static placeholder
         request = self.context.get('request') if hasattr(self, 'context') else None
-        if obj.imagen:
+        # prefer first related image
+        first = obj.imagenes.first() if hasattr(obj, 'imagenes') else None
+        if first:
             try:
-                return request.build_absolute_uri(obj.imagen.url) if request else obj.imagen.url
+                return request.build_absolute_uri(first.imagen.url) if request else first.imagen.url
             except Exception:
-                return obj.imagen.url
-        # fallback to a static placeholder (ensure this file exists under STATICFILES)
-        from django.conf import settings
-        placeholder = (settings.STATIC_URL or '/') + 'img/incidencia.png'
-        return request.build_absolute_uri(placeholder) if request else placeholder
+                return first.imagen.url
+        legacy_imagen = getattr(obj, 'imagen', None)
+        if legacy_imagen:
+            try:
+                return request.build_absolute_uri(legacy_imagen.url) if request else legacy_imagen.url
+            except Exception:
+                return legacy_imagen.url
+        # no image available -> return None so frontend can skip rendering
+        return None
+
+    def get_descripcion(self, obj):
+        # provide a short preview for list views (truncate to avoid large payloads)
+        txt = (obj.descripcion or '')
+        return txt if len(txt) <= 300 else txt[:297] + '...'
+
+    def get_reports_count(self, obj):
+        return obj.reporte_set.count()
+
+
+class IncidenciaImagenSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IncidenciaImagen
+        fields = ['id', 'url']
+
+    def get_url(self, obj):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        try:
+            return request.build_absolute_uri(obj.imagen.url) if request else obj.imagen.url
+        except Exception:
+            return obj.imagen.url
 
 
 class ReporteSerializer(serializers.ModelSerializer):
@@ -140,3 +263,113 @@ class NotificacionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notificacion
         fields = ['id', 'usuario', 'actor', 'mensaje', 'incidencia', 'leida', 'fecha_creacion']
+
+
+class IncidenciaModalSerializer(serializers.ModelSerializer):
+    """Serializer intended for the frontend PostModal shape.
+
+    Returns a UI-friendly payload with imagenes, author info, mapped comentarios and counts.
+    """
+    autor = PerfilMinSerializer(source='usuario', read_only=True)
+    tiempo = serializers.DateTimeField(source='fecha_creacion', read_only=True)
+    distrito = serializers.CharField(source='distrito.nombre', read_only=True)
+    estado = serializers.SerializerMethodField()
+    imagen = serializers.SerializerMethodField()
+    imagenes = serializers.SerializerMethodField()
+    comentarios = serializers.SerializerMethodField()
+    reacciones = serializers.SerializerMethodField()
+    reports_count = serializers.SerializerMethodField()
+    primer_reportero = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Incidencia
+        fields = [
+            'id', 'titulo', 'descripcion', 'direccion', 'latitud', 'longitud',
+            'distrito', 'estado', 'imagen', 'imagenes', 'autor', 'tiempo',
+            'comentarios', 'reacciones', 'reports_count', 'primer_reportero'
+        ]
+
+    def get_estado(self, obj):
+        if obj.estado:
+            return {'id': obj.estado.id, 'nombre': obj.estado.nombre, 'descripcion': obj.estado.descripcion}
+        return None
+
+    def get_imagen(self, obj):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        first = obj.imagenes.first() if hasattr(obj, 'imagenes') else None
+        if first:
+            try:
+                return request.build_absolute_uri(first.imagen.url) if request else first.imagen.url
+            except Exception:
+                return first.imagen.url
+        legacy = getattr(obj, 'imagen', None)
+        if legacy:
+            try:
+                return request.build_absolute_uri(legacy.url) if request else legacy.url
+            except Exception:
+                return legacy.url
+        return None
+
+    def get_imagenes(self, obj):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        imgs = []
+        for im in obj.imagenes.all():
+            try:
+                url = request.build_absolute_uri(im.imagen.url) if request else im.imagen.url
+            except Exception:
+                url = im.imagen.url
+            imgs.append({'id': im.id, 'url': url})
+        return imgs
+
+    def get_comentarios(self, obj):
+        out = []
+        for c in obj.comentarios.all().order_by('fecha_creacion'):
+            usuario = getattr(c, 'usuario', None)
+            author = None
+            avatar = None
+            if usuario:
+                author = (usuario.user.first_name or '') or usuario.user.email
+                try:
+                    request = self.context.get('request') if hasattr(self, 'context') else None
+                    avatar = request.build_absolute_uri(usuario.foto.url) if (request and usuario.foto) else (usuario.foto.url if usuario.foto else '/static/img/profile.jpg')
+                except Exception:
+                    avatar = usuario.foto.url if getattr(usuario, 'foto', None) else '/static/img/profile.jpg'
+            # compute likes count and whether the requesting user liked this comment
+            try:
+                request = self.context.get('request') if hasattr(self, 'context') else None
+                perfil = getattr(request.user, 'perfil', None) if request and hasattr(request, 'user') else None
+            except Exception:
+                perfil = None
+            likes_count = 0
+            liked_by_me = False
+            try:
+                from .models import ReaccionComentario
+                likes_count = ReaccionComentario.objects.filter(comentario_id=c.id).count()
+                if perfil:
+                    liked_by_me = ReaccionComentario.objects.filter(comentario_id=c.id, usuario=perfil).exists()
+            except Exception:
+                # defensive: if model not present or DB error, leave defaults
+                pass
+
+            out.append({
+                'id': c.id,
+                'author': author or 'Usuario anónimo',
+                'avatar': avatar or '/static/img/profile.jpg',
+                'text': c.contenido,
+                'time': c.fecha_creacion,
+                'likes': likes_count,
+                'liked_by_me': liked_by_me,
+            })
+        return out
+
+    def get_reacciones(self, obj):
+        return obj.reacciones.count() if hasattr(obj, 'reacciones') else 0
+
+    def get_reports_count(self, obj):
+        return obj.reporte_set.count()
+
+    def get_primer_reportero(self, obj):
+        first = obj.reporte_set.order_by('fecha_reporte').select_related('usuario').first()
+        if not first:
+            return None
+        return PerfilMinSerializer(first.usuario, context=self.context).data

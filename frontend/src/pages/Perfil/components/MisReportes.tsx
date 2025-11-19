@@ -13,7 +13,6 @@ export default function MisReportes() {
   const [page, setPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
   const [hasPrev, setHasPrev] = useState(false);
-  // removed debug JSON state
 
   useEffect(() => {
     let mounted = true;
@@ -23,8 +22,6 @@ export default function MisReportes() {
       setError(null);
       try {
   const data = await getMyReports(page, 10);
-  // debug: log raw response from backend
-  // removed debug console
   if (!mounted) return;
         // Map backend shape to frontend Report type
         const items = (data.results || []).map((r: any) => ({
@@ -38,7 +35,6 @@ export default function MisReportes() {
           reacciones_count: r.incidencia?.reacciones_count ?? 0,
         }));
   setReports(items);
-  // debug removed
         setHasNext(Boolean(data.next));
         setHasPrev(Boolean(data.previous));
       } catch (e: any) {
@@ -77,7 +73,6 @@ export default function MisReportes() {
           <Ojo key={r.id} title={r.nombre} date={r.fecha} status={r.estado || ''} image={r.imagen} comentarios={r.comentarios_count} reacciones={r.reacciones_count} />
         ))}
       </div>
-      {/* debug JSON removed */}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12 }}>
         <button disabled={!hasPrev || loading} onClick={() => setPage(p => Math.max(1, p - 1))} className="btn">Anterior</button>
         <span>Página {page}</span>
