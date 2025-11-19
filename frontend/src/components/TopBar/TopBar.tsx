@@ -3,7 +3,7 @@ import { LayoutDashboard, Receipt, User, LogOut, MapPin } from "lucide-react";
 import { useAuth } from "../../components/auth";
 import Notifications from "../Notifications/Notifications";
 import logo from '../../assets/logo_recortado.png';
-
+import Foro from "../../pages/Foro/Foro";
 const Topbar = () => {
   const ubicacion = useLocation();
   const { user, openLogin, logout } = useAuth();
@@ -12,6 +12,7 @@ const Topbar = () => {
   const links = [
     { path: "/", label: "Home"},
     { path: "/Rutas", label: "Rutas" },
+    { path: "/Foro", label: "Foro" },
   ];
 
   return (
