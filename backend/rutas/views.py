@@ -4,7 +4,7 @@ from .models import Empresa, Ruta, Recorrido, Paradero, RecorridoParadero
 #Algoritmo rutas
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .utils import calcular_distancia
+from .utils import calcular_distancia, encontrar_indice_mas_cercano
 
 def empresas_list(request):
     """API endpoint que lista todas las empresas"""
@@ -88,47 +88,88 @@ def buscar_rutas_view(request):
     punto_b = request.data.get('punto_b')
     
     if not punto_a or not punto_b:
-        return Response({'error': 'Faltan las coordenadas de punto_a o punto_b'}, status=400)
+        return Response({'error': 'Faltan coordenadas'}, status=400)
 
-    # Radio de búsqueda ajustado a 500m (estándar razonable)
-    RADIO_METROS = 2000  
+    RADIO_METROS = 500
     
-    # 1. Filtrar paraderos cercanos
     todos_paraderos = Paradero.objects.all()
-    ids_paraderos_cerca_a = []
-    ids_paraderos_cerca_b = []
+    
+    paraderos_cerca_a = []
+    paraderos_cerca_b = []
 
     for paradero in todos_paraderos:
         coord_paradero = {'lat': paradero.latitud, 'lng': paradero.longitud}
         
-        if calcular_distancia(punto_a, coord_paradero) <= RADIO_METROS:
-            ids_paraderos_cerca_a.append(paradero.id)
+        # Calculamos distancias
+        dist_a = calcular_distancia(punto_a, coord_paradero)
+        dist_b = calcular_distancia(punto_b, coord_paradero)
+        
+        #MEJORA 1: Guardamos el paradero Y SU DISTANCIA en una tupla
+        if dist_a <= RADIO_METROS:
+            paraderos_cerca_a.append({'obj': paradero, 'dist': dist_a})
             
-        if calcular_distancia(punto_b, coord_paradero) <= RADIO_METROS:
-            ids_paraderos_cerca_b.append(paradero.id)
+        if dist_b <= RADIO_METROS:
+            paraderos_cerca_b.append({'obj': paradero, 'dist': dist_b})
             
-    # 2. Buscar Recorridos
-    recorridos_a = Recorrido.objects.filter(
-        recorrido_paraderos__paradero_id__in=ids_paraderos_cerca_a
-    ).distinct()
+    #MEJORA 2: Ordenamos las listas por distancia (del más cercano al más lejano)
+    paraderos_cerca_a.sort(key=lambda x: x['dist'])
+    paraderos_cerca_b.sort(key=lambda x: x['dist'])
     
-    recorridos_b = Recorrido.objects.filter(
-        recorrido_paraderos__paradero_id__in=ids_paraderos_cerca_b
-    ).distinct()
+    #Extraemos solo los objetos ya ordenados para la lógica siguiente
+    lista_ordenada_a = [item['obj'] for item in paraderos_cerca_a]
+    lista_ordenada_b = [item['obj'] for item in paraderos_cerca_b]
+
+    #Filtramos los IDs para la base de datos
+    ids_a = [p.id for p in lista_ordenada_a]
+    ids_b = [p.id for p in lista_ordenada_b]
+
+    #Buscar Recorridos (Igual que antes)
+    recorridos_a = Recorrido.objects.filter(recorrido_paraderos__paradero_id__in=ids_a).distinct()
+    recorridos_b = Recorrido.objects.filter(recorrido_paraderos__paradero_id__in=ids_b).distinct()
     
-    # 3. Intersección
     recorridos_finales = recorridos_a & recorridos_b
     
-    # 4. Respuesta JSON
     respuesta = []
+    
     for rec in recorridos_finales:
+        paradero_inicio = None
+        paradero_fin = None
+        
+        #MEJORA 3: Ahora al iterar, como la lista está ordenada por cercanía,
+        # el 'break' se detendrá en el paradero MÁS CERCANO al click del usuario.
+        
+        for p in lista_ordenada_a:
+            if rec.recorrido_paraderos.filter(paradero_id=p.id).exists():
+                paradero_inicio = p
+                break # Se detiene en el más cercano
+        
+        for p in lista_ordenada_b:
+            if rec.recorrido_paraderos.filter(paradero_id=p.id).exists():
+                paradero_fin = p
+                break # Se detiene en el más cercano
+        
+        if not paradero_inicio or not paradero_fin:
+            coords_finales = rec.coordenadas
+        else:
+            coord_p_inicio = {'lat': paradero_inicio.latitud, 'lng': paradero_inicio.longitud}
+            coord_p_fin = {'lat': paradero_fin.latitud, 'lng': paradero_fin.longitud}
+            
+            idx_inicio = encontrar_indice_mas_cercano(coord_p_inicio, rec.coordenadas)
+            idx_fin = encontrar_indice_mas_cercano(coord_p_fin, rec.coordenadas)
+            
+            inicio_real = min(idx_inicio, idx_fin)
+            fin_real = max(idx_inicio, idx_fin)
+            
+            coords_finales = rec.coordenadas[inicio_real : fin_real + 1]
+
         respuesta.append({
             'id': rec.id,
             'nombre_ruta': rec.ruta.nombre,      
             'empresa': rec.ruta.empresa.nombre,  
             'sentido': rec.sentido,              
             'color': rec.color_linea,
-            'coordenadas': rec.coordenadas,      
+            'coordenadas': coords_finales,
+            'debug_info': f"Cortado de {paradero_inicio.nombre} a {paradero_fin.nombre}"
         })
         
     return Response(respuesta)
