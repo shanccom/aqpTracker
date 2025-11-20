@@ -4,7 +4,7 @@ from .models import Empresa, Ruta, Recorrido, Paradero, RecorridoParadero
 #Algoritmo rutas
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .utils import calcular_distancia, encontrar_indice_mas_cercano
+from .utils import analizar_cercania_ruta
 
 def empresas_list(request):
     """API endpoint que lista todas las empresas"""
@@ -90,77 +90,45 @@ def buscar_rutas_view(request):
     if not punto_a or not punto_b:
         return Response({'error': 'Faltan coordenadas'}, status=400)
 
-    RADIO_METROS = 500
+    # Solo por pruebas en pocas rutas
+    RADIO_METROS = 1000
     
-    todos_paraderos = Paradero.objects.all()
-    
-    paraderos_cerca_a = []
-    paraderos_cerca_b = []
-
-    for paradero in todos_paraderos:
-        coord_paradero = {'lat': paradero.latitud, 'lng': paradero.longitud}
-        
-        # Calculamos distancias
-        dist_a = calcular_distancia(punto_a, coord_paradero)
-        dist_b = calcular_distancia(punto_b, coord_paradero)
-        
-        #MEJORA 1: Guardamos el paradero Y SU DISTANCIA en una tupla
-        if dist_a <= RADIO_METROS:
-            paraderos_cerca_a.append({'obj': paradero, 'dist': dist_a})
-            
-        if dist_b <= RADIO_METROS:
-            paraderos_cerca_b.append({'obj': paradero, 'dist': dist_b})
-            
-    #MEJORA 2: Ordenamos las listas por distancia (del más cercano al más lejano)
-    paraderos_cerca_a.sort(key=lambda x: x['dist'])
-    paraderos_cerca_b.sort(key=lambda x: x['dist'])
-    
-    #Extraemos solo los objetos ya ordenados para la lógica siguiente
-    lista_ordenada_a = [item['obj'] for item in paraderos_cerca_a]
-    lista_ordenada_b = [item['obj'] for item in paraderos_cerca_b]
-
-    #Filtramos los IDs para la base de datos
-    ids_a = [p.id for p in lista_ordenada_a]
-    ids_b = [p.id for p in lista_ordenada_b]
-
-    #Buscar Recorridos (Igual que antes)
-    recorridos_a = Recorrido.objects.filter(recorrido_paraderos__paradero_id__in=ids_a).distinct()
-    recorridos_b = Recorrido.objects.filter(recorrido_paraderos__paradero_id__in=ids_b).distinct()
-    
-    recorridos_finales = recorridos_a & recorridos_b
+    # 1. TODOS los recorridos (IDA y VUELTA)
+    # OJO: miles de rutas, sería lento. 
+    # Para < 100 rutas, es rápido.
+    todos_recorridos = Recorrido.objects.select_related('ruta', 'ruta__empresa').all()
     
     respuesta = []
-    
-    for rec in recorridos_finales:
-        paradero_inicio = None
-        paradero_fin = None
+
+    for rec in todos_recorridos:
+        coordenadas_ruta = rec.coordenadas # La lista gigante de [lat, lng]
         
-        #MEJORA 3: Ahora al iterar, como la lista está ordenada por cercanía,
-        # el 'break' se detendrá en el paradero MÁS CERCANO al click del usuario.
+        if not coordenadas_ruta:
+            continue
+
+        # 2. ¿El Punto A está cerca de ALGÚN punto de esta línea?
+        datos_inicio = analizar_cercania_ruta(punto_a, coordenadas_ruta)
         
-        for p in lista_ordenada_a:
-            if rec.recorrido_paraderos.filter(paradero_id=p.id).exists():
-                paradero_inicio = p
-                break # Se detiene en el más cercano
-        
-        for p in lista_ordenada_b:
-            if rec.recorrido_paraderos.filter(paradero_id=p.id).exists():
-                paradero_fin = p
-                break # Se detiene en el más cercano
-        
-        if not paradero_inicio or not paradero_fin:
-            coords_finales = rec.coordenadas
-        else:
-            coord_p_inicio = {'lat': paradero_inicio.latitud, 'lng': paradero_inicio.longitud}
-            coord_p_fin = {'lat': paradero_fin.latitud, 'lng': paradero_fin.longitud}
+        if datos_inicio['distancia'] > RADIO_METROS:
+            continue # Si A no está cerca, descartamos la ruta y pasamos a la siguiente
             
-            idx_inicio = encontrar_indice_mas_cercano(coord_p_inicio, rec.coordenadas)
-            idx_fin = encontrar_indice_mas_cercano(coord_p_fin, rec.coordenadas)
+        # 3. ¿El Punto B está cerca de ALGÚN punto de esta línea?
+        datos_fin = analizar_cercania_ruta(punto_b, coordenadas_ruta)
+        
+        if datos_fin['distancia'] > RADIO_METROS:
+            continue # Si B no está cerca, descartamos
             
-            inicio_real = min(idx_inicio, idx_fin)
-            fin_real = max(idx_inicio, idx_fin)
-            
-            coords_finales = rec.coordenadas[inicio_real : fin_real + 1]
+        # 4. La ruta pasa cerca de A y cerca de B.
+        # Se corta la línea usando los índices que ya encontramos.
+        
+        idx_inicio = datos_inicio['indice']
+        idx_fin = datos_fin['indice']
+        
+        # Cortamos (Slice)
+        inicio_real = min(idx_inicio, idx_fin)
+        fin_real = max(idx_inicio, idx_fin)
+        
+        coords_finales = coordenadas_ruta[inicio_real : fin_real + 1]
 
         respuesta.append({
             'id': rec.id,
@@ -168,8 +136,9 @@ def buscar_rutas_view(request):
             'empresa': rec.ruta.empresa.nombre,  
             'sentido': rec.sentido,              
             'color': rec.color_linea,
-            'coordenadas': coords_finales,
-            'debug_info': f"Cortado de {paradero_inicio.nombre} a {paradero_fin.nombre}"
+            'coordenadas': coords_finales, # Segmento exacto "esquina baja"
+            'distancia_a_origen': int(datos_inicio['distancia']), # Dato curioso
+            'distancia_a_destino': int(datos_fin['distancia'])
         })
         
     return Response(respuesta)
