@@ -91,7 +91,7 @@ def buscar_rutas_view(request):
         return Response({'error': 'Faltan las coordenadas de punto_a o punto_b'}, status=400)
 
     # Radio de búsqueda ajustado a 500m (estándar razonable)
-    RADIO_METROS = 500  
+    RADIO_METROS = 2000  
     
     # 1. Filtrar paraderos cercanos
     todos_paraderos = Paradero.objects.all()
