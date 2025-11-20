@@ -23,3 +23,24 @@ def calcular_distancia(punto1, punto2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     
     return R * c
+
+def encontrar_indice_mas_cercano(coordenada_ref, lista_coordenadas):
+    """
+    Dada una coordenada de referencia (un paradero) y la lista de puntos de la ruta (polyline),
+    encuentra el ÍNDICE del punto más cercano en esa lista.
+    """
+    mejor_indice = -1
+    menor_distancia = float('inf') # Infinito
+
+    for i, punto in enumerate(lista_coordenadas):
+        # punto es [lat, lng] según el modelo JSONField
+        # Convertimos a dict para usar tu función calcular_distancia
+        coord_punto = {'lat': punto[0], 'lng': punto[1]} 
+        
+        dist = calcular_distancia(coordenada_ref, coord_punto)
+        
+        if dist < menor_distancia:
+            menor_distancia = dist
+            mejor_indice = i
+            
+    return mejor_indice
