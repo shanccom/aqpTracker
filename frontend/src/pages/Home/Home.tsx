@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Navigation, Search, Trash2 } from 'lucide-react';
+import { MapPin, Navigation, Search, Trash2, Locate } from 'lucide-react';
 import { buscarRutasBackend, type Coordenada, type RutaEncontrada } from '../../api/rutas';
 
 // --- Configuración de Iconos (igual que en RutaDetail) ---
@@ -149,6 +149,44 @@ export default function Home() {
     }
   }, [rutasEncontradas]);
 
+  // --- Función para Geolocalización -------------------------------------------
+  const handleUsarUbicacion = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Evita que se active el click del contenedor "Input A"
+    
+    if (!navigator.geolocation) {
+      setError("Tu navegador no soporta geolocalización");
+      return;
+    }
+
+    setLoading(true); // Reusamos el estado de carga para dar feedback visual
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        
+        const miUbicacion = { lat, lng };
+
+        // 1. Actualizamos el Punto A
+        setPuntoA(miUbicacion);
+        
+        // 2. Movemos el mapa suavemente hacia el usuario
+        mapRef.current?.flyTo([lat, lng], 15);
+
+        // 3. Pasamos el turno a seleccionar el Destino
+        setModoSeleccion('B');
+        
+        setLoading(false);
+      },
+      (err) => {
+        console.error(err);
+        setError("No se pudo obtener tu ubicación. Verifica los permisos del navegador.");
+        setLoading(false);
+      },
+      { enableHighAccuracy: true } // Pedimos la mejor precisión posible
+    );
+  };
+
 
   // --- Lógica de Negocio ---
   const handleBuscar = async () => {
@@ -211,6 +249,15 @@ export default function Home() {
                     {puntoA ? `${puntoA.lat.toFixed(4)}, ${puntoA.lng.toFixed(4)}` : 'Click en el mapa...'}
                   </p>
                 </div>
+                {/* --- NUEVO BOTÓN GPS --- */}
+                <button
+                  onClick={handleUsarUbicacion}
+                  className="p-2 bg-white text-gray-500 rounded-full shadow-sm border border-gray-200 hover:text-green-600 hover:border-green-500 transition-all"
+                  title="Usar mi ubicación actual"
+                >
+                  <Locate size={18} />
+                </button>
+                {/* ----------------------- */}
               </div>
             </div>
 
