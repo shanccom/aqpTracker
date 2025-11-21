@@ -282,7 +282,7 @@ export default function Home() {
                       <p className="text-xs text-gray-500">{ruta.empresa}</p>
                     </div>
                   </div>
-                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${ruta.sentido === 'IDA' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${ruta.sentido === 'IDA' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700' }`}>
                     {ruta.sentido}
                   </span>
                 </div>
