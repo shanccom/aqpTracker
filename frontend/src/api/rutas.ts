@@ -13,6 +13,8 @@ export interface RutaEncontrada {
   sentido: string;
   color: string;
   coordenadas: [number, number][]; // Lista de pares [lat, lng]
+  distancia_a_origen: number; 
+  distancia_a_destino: number;
 }
 
 export const buscarRutasBackend = async (puntoA: Coordenada, puntoB: Coordenada) => {

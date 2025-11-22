@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Navigation, Search, Trash2, Locate } from 'lucide-react';
+import { MapPin, Navigation, Search, Trash2, Locate, Eye, EyeOff } from 'lucide-react';
 import { buscarRutasBackend, type Coordenada, type RutaEncontrada } from '../../api/rutas';
 
-// --- Configuración de Iconos (igual que en RutaDetail) ---
+// --- Configuración de Iconos ---
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
@@ -31,22 +31,55 @@ const iconoB = L.divIcon({
   iconAnchor: [15, 15]
 });
 
+// Función para formatear distancias
+const formatearDistancia = (metros: number): string => {
+  if (metros < 1000) {
+    return `${Math.round(metros)} m`;
+  } else {
+    return `${(metros / 1000).toFixed(1)} km`;
+  }
+};
+
+// Función para determinar el tipo de ruta según las distancias
+const obtenerTipoRuta = (distanciaDestino: number): { tipo: string; color: string; badge: string } => {
+  if (distanciaDestino <= 50) {
+    return { 
+      tipo: 'directa', 
+      color: 'text-green-600', 
+      badge: 'bg-green-100 text-green-800 border-green-200'
+    };
+  } else if (distanciaDestino <= 200) {
+    return { 
+      tipo: 'cercana', 
+      color: 'text-yellow-600', 
+      badge: 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    };
+  } else {
+    return { 
+      tipo: 'aproximada', 
+      color: 'text-orange-600', 
+      badge: 'bg-orange-100 text-orange-800 border-orange-200'
+    };
+  }
+};
+
 export default function Home() {
   // Estados
   const [puntoA, setPuntoA] = useState<Coordenada | null>(null);
   const [puntoB, setPuntoB] = useState<Coordenada | null>(null);
-  const [modoSeleccion, setModoSeleccion] = useState<'A' | 'B'>('A'); // Qué punto estamos eligiendo
+  const [modoSeleccion, setModoSeleccion] = useState<'A' | 'B'>('A');
   
   const [rutasEncontradas, setRutasEncontradas] = useState<RutaEncontrada[]>([]);
+  const [rutasVisibles, setRutasVisibles] = useState<{ [key: number]: boolean }>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Referencias del Mapa (Leaflet manual)
+  // Referencias del Mapa
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerARef = useRef<L.Marker | null>(null);
   const markerBRef = useRef<L.Marker | null>(null);
-  const polylinesRef = useRef<L.Polyline[]>([]);
+  const polylinesRef = useRef<{ [key: number]: L.Polyline }>({});
 
   // 1. Inicializar el mapa
   useEffect(() => {
@@ -62,10 +95,6 @@ export default function Home() {
     // Evento de Click en el mapa
     map.on('click', (e: L.LeafletMouseEvent) => {
       const nuevaCoord = { lat: e.latlng.lat, lng: e.latlng.lng };
-      
-      // Usamos una función dentro del evento para leer el estado actualizado de 'modoSeleccion'
-      // Pero como los eventos de Leaflet cierran el scope, es mejor disparar un evento custom o usar refs.
-      // Truco rápido: Disparamos un evento custom al window para manejarlo en React
       window.dispatchEvent(new CustomEvent('map-click-custom', { detail: nuevaCoord }));
     });
 
@@ -120,45 +149,56 @@ export default function Home() {
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Limpiar líneas anteriores
-    polylinesRef.current.forEach(poly => poly.remove());
-    polylinesRef.current = [];
+    // Limpiar todas las líneas anteriores
+    Object.values(polylinesRef.current).forEach(poly => {
+      if (poly && mapRef.current) {
+        mapRef.current.removeLayer(poly);
+      }
+    });
+    polylinesRef.current = {};
 
     if (rutasEncontradas.length > 0) {
-      const bounds = L.latLngBounds([]); // Para ajustar el zoom
+      const bounds = L.latLngBounds([]);
 
       rutasEncontradas.forEach(ruta => {
-        const poly = L.polyline(ruta.coordenadas, {
-          color: ruta.color || '#3388ff',
-          weight: 5,
-          opacity: 0.7
-        }).addTo(mapRef.current!);
+        // Solo dibujar si la ruta está marcada como visible (por defecto es true)
+        if (rutasVisibles[ruta.id] !== false) {
+          const poly = L.polyline(ruta.coordenadas, {
+            color: ruta.color || '#3388ff',
+            weight: 5,
+            opacity: 0.7
+          }).addTo(mapRef.current!);
 
-        poly.bindPopup(`<b>${ruta.nombre_ruta}</b><br>${ruta.empresa} (${ruta.sentido})`);
-        
-        polylinesRef.current.push(poly);
-        
-        // Agregar coordenadas a los límites para hacer zoom fit
-        ruta.coordenadas.forEach(c => bounds.extend(c));
+          poly.bindPopup(`
+            <b>${ruta.nombre_ruta}</b><br>
+            ${ruta.empresa} (${ruta.sentido})<br>
+            <small>Distancia al destino: ${formatearDistancia(ruta.distancia_a_destino)}</small>
+          `);
+          
+          polylinesRef.current[ruta.id] = poly;
+          
+          // Agregar coordenadas a los límites para hacer zoom fit
+          ruta.coordenadas.forEach(c => bounds.extend(c));
+        }
       });
 
-      // Ajustar vista para ver todas las rutas
+      // Ajustar vista para ver todas las rutas visibles
       if (bounds.isValid()) {
         mapRef.current.fitBounds(bounds, { padding: [50, 50] });
       }
     }
-  }, [rutasEncontradas]);
+  }, [rutasEncontradas, rutasVisibles]);
 
-  // --- Función para Geolocalización -------------------------------------------
+  // --- Función para Geolocalización ---
   const handleUsarUbicacion = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Evita que se active el click del contenedor "Input A"
+    e.stopPropagation();
     
     if (!navigator.geolocation) {
       setError("Tu navegador no soporta geolocalización");
       return;
     }
 
-    setLoading(true); // Reusamos el estado de carga para dar feedback visual
+    setLoading(true);
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -167,15 +207,9 @@ export default function Home() {
         
         const miUbicacion = { lat, lng };
 
-        // 1. Actualizamos el Punto A
         setPuntoA(miUbicacion);
-        
-        // 2. Movemos el mapa suavemente hacia el usuario
         mapRef.current?.flyTo([lat, lng], 15);
-
-        // 3. Pasamos el turno a seleccionar el Destino
         setModoSeleccion('B');
-        
         setLoading(false);
       },
       (err) => {
@@ -183,10 +217,33 @@ export default function Home() {
         setError("No se pudo obtener tu ubicación. Verifica los permisos del navegador.");
         setLoading(false);
       },
-      { enableHighAccuracy: true } // Pedimos la mejor precisión posible
+      { enableHighAccuracy: true }
     );
   };
 
+  // --- Funciones de Visibilidad ---
+  const toggleVisibilidadRuta = (rutaId: number) => {
+    setRutasVisibles(prev => ({
+      ...prev,
+      [rutaId]: !prev[rutaId]
+    }));
+  };
+
+  const mostrarTodasLasRutas = () => {
+    const nuevasVisibilidades: { [key: number]: boolean } = {};
+    rutasEncontradas.forEach(ruta => {
+      nuevasVisibilidades[ruta.id] = true;
+    });
+    setRutasVisibles(nuevasVisibilidades);
+  };
+
+  const ocultarTodasLasRutas = () => {
+    const nuevasVisibilidades: { [key: number]: boolean } = {};
+    rutasEncontradas.forEach(ruta => {
+      nuevasVisibilidades[ruta.id] = false;
+    });
+    setRutasVisibles(nuevasVisibilidades);
+  };
 
   // --- Lógica de Negocio ---
   const handleBuscar = async () => {
@@ -194,13 +251,27 @@ export default function Home() {
     
     setLoading(true);
     setError(null);
-    setRutasEncontradas([]); // Limpiar anteriores
+    setRutasEncontradas([]);
+    setRutasVisibles({});
 
     try {
       const resultados = await buscarRutasBackend(puntoA, puntoB);
-      setRutasEncontradas(resultados);
       
-      if (resultados.length === 0) {
+      // Ordenar rutas: primero las que llegan más cerca del destino
+      const rutasOrdenadas = [...resultados].sort((a, b) => {
+        return a.distancia_a_destino - b.distancia_a_destino;
+      });
+      
+      setRutasEncontradas(rutasOrdenadas);
+      
+      // Por defecto, todas las rutas son visibles
+      const visibilidadesIniciales: { [key: number]: boolean } = {};
+      rutasOrdenadas.forEach(ruta => {
+        visibilidadesIniciales[ruta.id] = true;
+      });
+      setRutasVisibles(visibilidadesIniciales);
+      
+      if (rutasOrdenadas.length === 0) {
         setError("No se encontraron rutas que pasen cerca de ambos puntos (Radio 500m).");
       }
     } catch (err) {
@@ -215,9 +286,15 @@ export default function Home() {
     setPuntoA(null);
     setPuntoB(null);
     setRutasEncontradas([]);
+    setRutasVisibles({});
     setModoSeleccion('A');
     setError(null);
   };
+
+  // Contadores por tipo de ruta
+  const rutasDirectas = rutasEncontradas.filter(r => r.distancia_a_destino <= 50).length;
+  const rutasCercanas = rutasEncontradas.filter(r => r.distancia_a_destino > 50 && r.distancia_a_destino <= 200).length;
+  const rutasAproximadas = rutasEncontradas.filter(r => r.distancia_a_destino > 200).length;
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -249,7 +326,6 @@ export default function Home() {
                     {puntoA ? `${puntoA.lat.toFixed(4)}, ${puntoA.lng.toFixed(4)}` : 'Click en el mapa...'}
                   </p>
                 </div>
-                {/* --- NUEVO BOTÓN GPS --- */}
                 <button
                   onClick={handleUsarUbicacion}
                   className="p-2 bg-white text-gray-500 rounded-full shadow-sm border border-gray-200 hover:text-green-600 hover:border-green-500 transition-all"
@@ -257,7 +333,6 @@ export default function Home() {
                 >
                   <Locate size={18} />
                 </button>
-                {/* ----------------------- */}
               </div>
             </div>
 
@@ -279,33 +354,33 @@ export default function Home() {
           </div>
 
           {/* Botones de Acción */}
-            <div className="flex gap-3">
-              <button
-                onClick={handleBuscar}
-                disabled={!puntoA || !puntoB || loading}
-                className="flex-1 bg-gradient-to-r from-red-500 to-orange-500 text-white py-3 px-4 rounded-lg font-bold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
-              >
-                {loading ? (
-                  <span key="loading" className="flex items-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Buscando...</span>
-                  </span>
-                ) : (
-                  <span key="idle" className="flex items-center gap-2">
-                    <Search size={18} />
-                    <span>Buscar Rutas</span>
-                  </span>
-                )}
-              </button>
-              
-              <button
-                onClick={limpiarMapa}
-                className="p-3 text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 hover:text-red-500 transition-colors"
-                title="Limpiar mapa"
-              >
-                <Trash2 size={20} />
-              </button>
-            </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleBuscar}
+              disabled={!puntoA || !puntoB || loading}
+              className="flex-1 bg-gradient-to-r from-red-500 to-orange-500 text-white py-3 px-4 rounded-lg font-bold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+            >
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Buscando...</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Search size={18} />
+                  <span>Buscar Rutas</span>
+                </span>
+              )}
+            </button>
+            
+            <button
+              onClick={limpiarMapa}
+              className="p-3 text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 hover:text-red-500 transition-colors"
+              title="Limpiar mapa"
+            >
+              <Trash2 size={20} />
+            </button>
+          </div>
 
           {/* Mensajes de Error */}
           {error && (
@@ -317,23 +392,110 @@ export default function Home() {
           {/* Lista de Resultados */}
           {rutasEncontradas.length > 0 && (
             <div className="space-y-3">
-              <h3 className="font-bold text-gray-800 border-b pb-2">
-                {rutasEncontradas.length} Rutas encontradas
-              </h3>
-              {rutasEncontradas.map((ruta) => (
-                <div key={ruta.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-2 h-10 rounded-full" style={{ backgroundColor: ruta.color }}></div>
-                    <div>
-                      <h4 className="font-bold text-gray-800">{ruta.nombre_ruta}</h4>
-                      <p className="text-xs text-gray-500">{ruta.empresa}</p>
-                    </div>
+              <div className="flex justify-between items-center border-b pb-2">
+                <div>
+                  <h3 className="font-bold text-gray-800">
+                    {rutasEncontradas.length} Rutas encontradas
+                  </h3>
+                  <div className="flex gap-2 mt-1">
+                    {rutasDirectas > 0 && (
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                        {rutasDirectas} directas
+                      </span>
+                    )}
+                    {rutasCercanas > 0 && (
+                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+                        {rutasCercanas} cercanas
+                      </span>
+                    )}
+                    {rutasAproximadas > 0 && (
+                      <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                        {rutasAproximadas} aproximadas
+                      </span>
+                    )}
                   </div>
-                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${ruta.sentido === 'IDA' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700' }`}>
-                    {ruta.sentido}
-                  </span>
                 </div>
-              ))}
+                <div className="flex gap-1">
+                  <button
+                    onClick={mostrarTodasLasRutas}
+                    className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 transition-colors"
+                    title="Mostrar todas las rutas"
+                  >
+                    Todas
+                  </button>
+                  <button
+                    onClick={ocultarTodasLasRutas}
+                    className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 transition-colors"
+                    title="Ocultar todas las rutas"
+                  >
+                    Ninguna
+                  </button>
+                </div>
+              </div>
+              {rutasEncontradas.map((ruta) => {
+                const tipoInfo = obtenerTipoRuta(ruta.distancia_a_destino);
+                return (
+                  <div 
+                    key={ruta.id} 
+                    className={`bg-white p-3 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all ${
+                      rutasVisibles[ruta.id] === false ? 'opacity-50 bg-gray-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3 flex-1">
+                        <div 
+                          className="w-2 h-10 rounded-full" 
+                          style={{ backgroundColor: ruta.color }}
+                        ></div>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-gray-800">{ruta.nombre_ruta}</h4>
+                          <p className="text-xs text-gray-500">{ruta.empresa}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => toggleVisibilidadRuta(ruta.id)}
+                        className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+                        title={rutasVisibles[ruta.id] === false ? "Mostrar ruta" : "Ocultar ruta"}
+                      >
+                        {rutasVisibles[ruta.id] === false ? (
+                          <EyeOff size={18} />
+                        ) : (
+                          <Eye size={18} />
+                        )}
+                      </button>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                        ruta.sentido === 'IDA' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {ruta.sentido}
+                      </span>
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full border ${tipoInfo.badge}`}>
+                        {tipoInfo.tipo === 'directa' ? ' Directa' : 
+                         tipoInfo.tipo === 'cercana' ? ' Cercana' : ' Aproximada'}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-gray-600 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Distancia al origen:</span>
+                        <span className="font-medium">{formatearDistancia(ruta.distancia_a_origen)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Distancia al destino:</span>
+                        <span className={`font-medium ${tipoInfo.color}`}>
+                          {formatearDistancia(ruta.distancia_a_destino)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {rutasVisibles[ruta.id] === false && (
+                      <p className="text-xs text-gray-400 mt-2">Ruta oculta en el mapa</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
