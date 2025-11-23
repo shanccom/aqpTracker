@@ -5,6 +5,7 @@ import { timeAgo, formatDateTime } from '../../utils/date'
 import CommentsList from './CommentsList'
 import NewCommentBox from './NewCommentBox'
 import api from '../../api/axios'
+import { useAuth } from '../auth/AuthProvider'
 
 type Post = {
   id: number
@@ -26,6 +27,7 @@ type Post = {
 }
 
 const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComments?: any[], onLike?: (id: number) => void, onApoyar?: (id: number) => void }> = ({ post, onClose, initialComments = [], onLike, onApoyar }) => {
+  const { user } = useAuth()
   const [comments, setComments] = useState(initialComments)
   const [reported, setReported] = useState<boolean>(false)
   const [reportsCountState, setReportsCountState] = useState<number>(post?.reports_count ?? 0)
@@ -60,7 +62,7 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
         // map backend comment to UI shape expected by CommentsList
         const usuario = created.usuario || null
         const author = usuario ? (usuario.first_name || usuario.email || 'Usuario') : 'Tú'
-        const avatar = usuario ? (usuario.foto || '/static/img/profile.jpg') : '/static/img/profile.jpg'
+        const avatar = usuario ? (usuario.foto || (user?.foto ?? '/img/profile_default.png')) : (user?.foto ?? '/img/profile_default.png')
         const mapped = {
           id: created.id,
           author,
@@ -73,7 +75,7 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
         setComments(prev => [mapped, ...(prev || [])])
       } catch (err) {
         // fallback to optimistic local comment if request fails
-        const next = [{ id: Date.now(), author: 'Tú', text, time: 'ahora', likes: 0 }, ...comments]
+        const next = [{ id: Date.now(), author: 'Tú', avatar: user?.foto ?? '/img/profile_default.png', text, time: 'ahora', likes: 0 }, ...comments]
         setComments(next)
       }
     })()
@@ -417,7 +419,8 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
           <div className="mb-4">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Comentarios</h2>
             <CommentsList comments={comments} onLike={handleCommentLike} />
-            <NewCommentBox onAdd={addComment} />
+            {/* New comment box should show the logged-in user's avatar; if not logged show frontend default */}
+            <NewCommentBox onAdd={addComment} avatar={user?.foto || '/img/profile_default.png'} />
           </div>
         </div>
         <ConfirmModal
