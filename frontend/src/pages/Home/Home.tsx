@@ -163,7 +163,7 @@ export default function Home() {
     }
   }, [puntoA, puntoB]);
 
-  // 4. Dibujar Rutas Encontradas (VERSIÓN CORREGIDA)
+  // 4. Dibujar Rutas Encontradas
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -253,9 +253,6 @@ export default function Home() {
           bounds.extend([combinada.punto_transbordo.lat, combinada.punto_transbordo.lng]);
           hasVisibleRoutes = true;
           
-          console.log(`Marcador de transbordo agregado para: ${rutaKey}`);
-        } else {
-          console.log(`Ruta combinada ${rutaKey} está oculta, no dibujar`);
         }
       });
     }
@@ -273,27 +270,16 @@ export default function Home() {
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Si no hay puntos A y B, limpiar todo
     if (!puntoA && !puntoB) {
-      console.log('Limpiando mapa - sin puntos A y B');
-      
-      // Limpiar polylines
       Object.values(polylinesRef.current).forEach(poly => {
-        if (poly && mapRef.current) {
-          mapRef.current.removeLayer(poly);
-        }
+        if (poly && mapRef.current) mapRef.current.removeLayer(poly);
       });
       polylinesRef.current = {};
 
-      // Limpiar marcadores de transbordo
       Object.values(markersTransbordoRef.current).forEach(marker => {
-        if (marker && mapRef.current) {
-          mapRef.current.removeLayer(marker);
-        }
+        if (marker && mapRef.current) mapRef.current.removeLayer(marker);
       });
       markersTransbordoRef.current = {};
-
-      // Resetear estado de combinadas
       setMostrarCombinadas(false);
     }
   }, [puntoA, puntoB]);
@@ -313,7 +299,6 @@ export default function Home() {
       (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        
         const miUbicacion = { lat, lng };
 
         setPuntoA(miUbicacion);
@@ -332,44 +317,23 @@ export default function Home() {
 
   // --- Funciones de Visibilidad ---
   const toggleVisibilidadRuta = (rutaId: string) => {
-    console.log(`Alternando visibilidad de: ${rutaId}`);
-    
-    setRutasVisibles(prev => {
-      const nuevoEstado = {
-        ...prev,
-        [rutaId]: !prev[rutaId]
-      };
-      
-      console.log('Nuevo estado de visibilidad:', nuevoEstado);
-      return nuevoEstado;
-    });
+    setRutasVisibles(prev => ({
+       ...prev,
+       [rutaId]: !prev[rutaId]
+    }));
   };
 
   const mostrarTodasLasRutas = () => {
     const nuevasVisibilidades: { [key: string]: boolean } = {};
-    
-    rutasDirectas.forEach(ruta => {
-      nuevasVisibilidades[`directa-${ruta.id}`] = true;
-    });
-    
-    rutasCombinadas.forEach(combinada => {
-      nuevasVisibilidades[`combinada-${combinada.id}`] = true;
-    });
-    
+    rutasDirectas.forEach(ruta => { nuevasVisibilidades[`directa-${ruta.id}`] = true; });
+    rutasCombinadas.forEach(combinada => { nuevasVisibilidades[`combinada-${combinada.id}`] = true; });
     setRutasVisibles(nuevasVisibilidades);
   };
 
   const ocultarTodasLasRutas = () => {
     const nuevasVisibilidades: { [key: string]: boolean } = {};
-    
-    rutasDirectas.forEach(ruta => {
-      nuevasVisibilidades[`directa-${ruta.id}`] = false;
-    });
-    
-    rutasCombinadas.forEach(combinada => {
-      nuevasVisibilidades[`combinada-${combinada.id}`] = false;
-    });
-    
+    rutasDirectas.forEach(ruta => { nuevasVisibilidades[`directa-${ruta.id}`] = false; });
+    rutasCombinadas.forEach(combinada => { nuevasVisibilidades[`combinada-${combinada.id}`] = false; });
     setRutasVisibles(nuevasVisibilidades);
   };
 
@@ -377,51 +341,38 @@ export default function Home() {
   const buscarRutasCombinadas = async () => {
     if (!puntoA || !puntoB) return;
     
-    console.log('Iniciando búsqueda de rutas combinadas...');
     setBuscandoCombinadas(true);
     setError(null);
 
     try {
-      // Limpiar rutas combinadas anteriores y sus marcadores
       setRutasCombinadas([]);
       setMostrarCombinadas(false);
-      
-      // Pequeño delay para asegurar la limpieza
       await new Promise(resolve => setTimeout(resolve, 100));
       
       const resultados = await buscarRutasCombinadasBackend(puntoA, puntoB);
-      console.log('Rutas combinadas encontradas:', resultados.length);
       
       if (resultados && resultados.length > 0) {
         setRutasCombinadas(resultados);
         setMostrarCombinadas(true);
-        
-        // Hacer visibles todas las rutas combinadas por defecto
         const nuevasVisibilidades = { ...rutasVisibles };
         resultados.forEach((combinada: RutaCombinada) => {
           nuevasVisibilidades[`combinada-${combinada.id}`] = true;
         });
         setRutasVisibles(nuevasVisibilidades);
-        
-        console.log('Rutas combinadas configuradas como visibles');
       } else {
         setError("No se encontraron rutas combinadas posibles. Intenta con puntos diferentes.");
       }
     } catch (err: any) {
       console.error('Error al buscar rutas combinadas:', err);
-      
-      if (err.response?.data?.error) {
-        setError(`Error del servidor: ${err.response.data.error}`);
-      } else if (err.code === 'ECONNABORTED') {
-        setError("La búsqueda está tomando demasiado tiempo. Intenta con puntos más cercanos.");
-      } else {
-        setError("Error al conectar con el servidor. Verifica tu conexión.");
-      }
+      if (err.response?.data?.error) setError(`Error del servidor: ${err.response.data.error}`);
+      else if (err.code === 'ECONNABORTED') setError("La búsqueda está tomando demasiado tiempo. Intenta con puntos más cercanos.");
+      else setError("Error al conectar con el servidor. Verifica tu conexión.");
     } finally {
       setBuscandoCombinadas(false);
     }
   };
 
+  // --- MODIFICACIÓN CLAVE AQUÍ ---
   const handleBuscar = async () => {
     if (!puntoA || !puntoB) return;
     
@@ -438,12 +389,21 @@ export default function Home() {
       const resultados: ResultadoBusqueda = await buscarRutasBackend(puntoA, puntoB);
       console.log('Respuesta recibida:', resultados);
       
-      setRutasDirectas(resultados.rutas_directas);
+      // 1. Ordenar rutas: Prioridad a la que te deja más cerca (menor distancia a destino)
+      const rutasOrdenadas = [...resultados.rutas_directas].sort((a, b) => 
+        a.distancia_a_destino - b.distancia_a_destino
+      );
+
+      setRutasDirectas(rutasOrdenadas);
       
-      // Hacer visibles todas las rutas directas por defecto
+      // 2. Configurar visibilidad: SOLO la primera (la mejor) en TRUE, las demás FALSE
       const nuevasVisibilidades: { [key: string]: boolean } = {};
-      resultados.rutas_directas.forEach(ruta => {
-        nuevasVisibilidades[`directa-${ruta.id}`] = true;
+      rutasOrdenadas.forEach((ruta, index) => {
+        if (index === 0) {
+          nuevasVisibilidades[`directa-${ruta.id}`] = true; // Solo mostramos la mejor
+        } else {
+          nuevasVisibilidades[`directa-${ruta.id}`] = false; // Las demás ocultas
+        }
       });
       setRutasVisibles(nuevasVisibilidades);
 
@@ -454,16 +414,10 @@ export default function Home() {
       }
     } catch (err: any) {
       console.error('Error en handleBuscar:', err);
+      if (err.response?.data?.error) setError(`Error del servidor: ${err.response.data.error}`);
+      else if (err.code === 'ECONNABORTED') setError("La búsqueda está tomando demasiado tiempo.");
+      else setError("Error al conectar con el servidor. Verifica tu conexión.");
       
-      if (err.response?.data?.error) {
-        setError(`Error del servidor: ${err.response.data.error}`);
-      } else if (err.code === 'ECONNABORTED') {
-        setError("La búsqueda está tomando demasiado tiempo.");
-      } else {
-        setError("Error al conectar con el servidor. Verifica tu conexión.");
-      }
-      
-      // Forzar reset de estados en caso de error
       setRutasDirectas([]);
       setRutasCombinadas([]);
     } finally {
@@ -471,11 +425,9 @@ export default function Home() {
       console.log('Búsqueda finalizada');
     }
   };
+  // ------------------------------
 
   const limpiarMapa = () => {
-    console.log('Limpiando mapa completamente');
-    
-    // Limpiar estados
     setPuntoA(null);
     setPuntoB(null);
     setRutasDirectas([]);
@@ -485,9 +437,7 @@ export default function Home() {
     setError(null);
     setMostrarCombinadas(false);
     
-    // Limpiar referencias del mapa
     if (mapRef.current) {
-      // Centrar mapa en Arequipa
       mapRef.current.setView([-16.409047, -71.536952], 14);
     }
   };
