@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { MapPin, ThumbsUp, MessageCircle, Users, Calendar, User, Heart } from 'lucide-react'
 import ConfirmModal from '../../components/ui/ConfirmModal'
+import { useAuth } from '../auth/AuthProvider'
 import { timeAgo, formatDateShort } from '../../utils/date'
 
 type Post = {
@@ -29,6 +30,7 @@ type Props = {
 }
 
 const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
+  const { user, openLogin } = useAuth()
   const ubicacionText = typeof (post as any).ubicacion === 'object'
     ? ((post as any).ubicacion?.nombre ?? String((post as any).ubicacion))
     : (post.ubicacion || '')
@@ -57,6 +59,7 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
 
   const handleApoyar = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!user) { openLogin(); return }
     if ((post as any).reported_by_me || isReported) return
     setShowConfirm(true)
   }
@@ -69,6 +72,7 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!user) { openLogin(); return }
     onLike?.(post.id)
   }
 
@@ -262,7 +266,7 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
               </button>
 
               {/* Botón Comentar */}
-              <div className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white border border-blue-700 rounded-lg min-w-[120px] justify-center">
+              <button onClick={(e) => { e.stopPropagation(); if (!user) { openLogin(); } else { onOpen(post) } }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white border border-blue-700 rounded-lg min-w-[120px] justify-center">
                 <MessageCircle size={18} />
                 <span className="font-medium">Comentar</span>
                 {(post.comentarios ?? 0) > 0 && (
@@ -270,7 +274,7 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
                     {post.comentarios}
                   </span>
                 )}
-              </div>
+              </button>
             </div>
           </div>
         </div>

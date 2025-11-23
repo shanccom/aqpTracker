@@ -13,7 +13,7 @@ type Comment = {
 const CommentItem: React.FC<{ comment: Comment, onLike?: (id: number) => void }> = ({ comment, onLike }) => {
   return (
     <div className="flex items-start gap-3">
-      <img alt={`Avatar de ${comment.author}`} className="w-10 h-10 rounded-full" src={comment.avatar || '/static/img/profile.jpg'} />
+      <img alt={`Avatar de ${comment.author}`} className="w-10 h-10 rounded-full" src={comment.avatar || '/img/profile_default.png'} />
       <div className="flex-1">
         <div className="bg-white rounded-lg p-3 border border-gray-100">
           <div className="flex items-center justify-between mb-1">
