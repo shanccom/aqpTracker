@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { MapPin, ThumbsUp, MessageCircle, Users, Calendar, User, Heart } from 'lucide-react'
 import ConfirmModal from '../../components/ui/ConfirmModal'
+import { useAuth } from '../auth/AuthProvider'
 import { timeAgo, formatDateShort } from '../../utils/date'
 
 type Post = {
@@ -29,16 +30,22 @@ type Props = {
 }
 
 const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
+  const { user, openLogin } = useAuth()
   const ubicacionText = typeof (post as any).ubicacion === 'object'
     ? ((post as any).ubicacion?.nombre ?? String((post as any).ubicacion))
     : (post.ubicacion || '')
   const direccionText = post.direccion || ''
-  const distritoText = post.distrito || ''
+  const distritoText = typeof (post as any).distrito === 'object'
+    ? ((post as any).distrito?.nombre ?? String((post as any).distrito))
+    : (post.distrito || '')
+  const estadoText = typeof (post as any).estado === 'object'
+    ? ((post as any).estado?.nombre ?? String((post as any).estado))
+    : (post.estado || '')
   const autorText = typeof (post as any).autor === 'object'
     ? ((post as any).autor?.nombre || (post as any).autor?.first_name || String((post as any).autor))
     : (post.autor || '')
-  // try to read coordinates from several possible shapes the backend might provide
-  const rawLat = (post as any).latitud ?? (post as any).lat ?? (post as any).latitude ?? (post as any).location?.lat
+
+    const rawLat = (post as any).latitud ?? (post as any).lat ?? (post as any).latitude ?? (post as any).location?.lat
   const rawLon = (post as any).longitud ?? (post as any).lon ?? (post as any).lng ?? (post as any).location?.lon ?? (post as any).location?.lng
   const lat = rawLat !== undefined && rawLat !== null ? parseFloat(String(rawLat)) : undefined
   const lon = rawLon !== undefined && rawLon !== null ? parseFloat(String(rawLon)) : undefined
@@ -52,14 +59,12 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
 
   const handleApoyar = (e: React.MouseEvent) => {
     e.stopPropagation()
-    // if already reported by current user, do nothing
+    if (!user) { openLogin(); return }
     if ((post as any).reported_by_me || isReported) return
-    // open confirmation modal
     setShowConfirm(true)
   }
 
   const doConfirm = () => {
-    // optimistic update: mark reported locally, disable button
     setIsReported(true)
     setShowConfirm(false)
     onApoyar?.(post.id)
@@ -67,11 +72,11 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!user) { openLogin(); return }
     onLike?.(post.id)
   }
 
   const handleOpenIfNotAction = (e: React.MouseEvent) => {
-    // if the user clicked a button (or inside a button), don't open the modal details
     const el = e.target as HTMLElement | null
     if (el && el.closest('button')) return
     onOpen(post)
@@ -96,15 +101,15 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
             )}
           </div>
 
-          {post.estado && (
+          {estadoText && (
             <div className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${
-              post.estado === 'Activo' 
+              estadoText === 'Activo' 
                 ? 'bg-orange-100 text-orange-700 border border-orange-200' 
-                : post.estado === 'Resuelto'
+                : estadoText === 'Resuelto'
                 ? 'bg-green-100 text-green-700 border border-green-200'
                 : 'bg-gray-100 text-gray-700 border border-gray-200'
             }`}>
-              {post.estado}
+              {estadoText}
             </div>
           )}
         </div>
@@ -261,7 +266,7 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
               </button>
 
               {/* Botón Comentar */}
-              <div className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white border border-blue-700 rounded-lg min-w-[120px] justify-center">
+              <button onClick={(e) => { e.stopPropagation(); if (!user) { openLogin(); } else { onOpen(post) } }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white border border-blue-700 rounded-lg min-w-[120px] justify-center">
                 <MessageCircle size={18} />
                 <span className="font-medium">Comentar</span>
                 {(post.comentarios ?? 0) > 0 && (
@@ -269,7 +274,7 @@ const PostCard: React.FC<Props> = ({ post, onOpen, onApoyar, onLike }) => {
                     {post.comentarios}
                   </span>
                 )}
-              </div>
+              </button>
             </div>
           </div>
         </div>

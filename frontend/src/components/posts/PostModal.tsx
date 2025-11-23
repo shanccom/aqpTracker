@@ -5,6 +5,7 @@ import { timeAgo, formatDateTime } from '../../utils/date'
 import CommentsList from './CommentsList'
 import NewCommentBox from './NewCommentBox'
 import api from '../../api/axios'
+import { useAuth } from '../auth/AuthProvider'
 
 type Post = {
   id: number
@@ -26,6 +27,7 @@ type Post = {
 }
 
 const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComments?: any[], onLike?: (id: number) => void, onApoyar?: (id: number) => void }> = ({ post, onClose, initialComments = [], onLike, onApoyar }) => {
+  const { user, openLogin } = useAuth()
   const [comments, setComments] = useState(initialComments)
   const [reported, setReported] = useState<boolean>(false)
   const [reportsCountState, setReportsCountState] = useState<number>(post?.reports_count ?? 0)
@@ -39,7 +41,9 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
 
   if (!post) return null
 
-  const distritoText = post.distrito || ''
+  const distritoText = typeof (post as any).distrito === 'object'
+    ? ((post as any).distrito?.nombre ?? String((post as any).distrito))
+    : (post.distrito || '')
   const direccionText = post.direccion || ''
   const estadoText = typeof (post as any).estado === 'object'
     ? ((post as any).estado?.nombre ?? String((post as any).estado))
@@ -49,6 +53,11 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
     : (post.autor || '')
 
   const addComment = (text: string) => {
+    if (!user) {
+      // prompt login if not authenticated
+      openLogin()
+      return
+    }
     // POST the comment to backend then update UI with the returned comment
     (async () => {
       try {
@@ -58,7 +67,7 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
         // map backend comment to UI shape expected by CommentsList
         const usuario = created.usuario || null
         const author = usuario ? (usuario.first_name || usuario.email || 'Usuario') : 'Tú'
-        const avatar = usuario ? (usuario.foto || '/static/img/profile.jpg') : '/static/img/profile.jpg'
+        const avatar = usuario ? (usuario.foto || (user?.foto ?? '/img/profile_default.png')) : (user?.foto ?? '/img/profile_default.png')
         const mapped = {
           id: created.id,
           author,
@@ -71,7 +80,7 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
         setComments(prev => [mapped, ...(prev || [])])
       } catch (err) {
         // fallback to optimistic local comment if request fails
-        const next = [{ id: Date.now(), author: 'Tú', text, time: 'ahora', likes: 0 }, ...comments]
+        const next = [{ id: Date.now(), author: 'Tú', avatar: user?.foto ?? '/img/profile_default.png', text, time: 'ahora', likes: 0 }, ...comments]
         setComments(next)
       }
     })()
@@ -114,6 +123,8 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
       // ignore for now (could show toast)
     }
   }
+
+  const openLoginIfNeeded = () => openLogin()
 
   useEffect(() => {
     let mounted = true
@@ -201,6 +212,7 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
   }, [galleryOpen, images.length])
 
   const handleSupport = async () => {
+    if (!user) { openLoginIfNeeded(); return }
     if (reported) return
     setLoadingReport(true)
     try {
@@ -227,6 +239,7 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
   }
 
   const handleLike = () => {
+    if (!user) { openLoginIfNeeded(); return }
     if (onLike) {
       try {
         onLike(post.id)
@@ -261,12 +274,12 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-              {/* use author's foto URL from fullPost.autor (provided by IncidenciaModalSerializer) if available */}
+              {/* Show author's foto only when a user is logged in; otherwise show frontend default */}
               <img
                 src={
                   (fullPost && fullPost.autor && fullPost.autor.foto) ||
                   (typeof (post as any).autor === 'object' && (post as any).autor?.foto) ||
-                  '/static/img/profile.jpg'
+                  '/img/profile_default.png'
                 }
                 alt={autorText || 'avatar'}
                 className="w-full h-full object-cover"
@@ -415,7 +428,8 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
           <div className="mb-4">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Comentarios</h2>
             <CommentsList comments={comments} onLike={handleCommentLike} />
-            <NewCommentBox onAdd={addComment} />
+              {/* Pass only the logged-in user's foto to the NewCommentBox; otherwise show default */}
+              <NewCommentBox onAdd={addComment} avatar={user?.foto ?? '/img/profile_default.png'} />
           </div>
         </div>
         <ConfirmModal

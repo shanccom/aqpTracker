@@ -4,6 +4,7 @@ from .models import (
     Comentario, ReaccionIncidencia, ReaccionComentario, Notificacion, IncidenciaImagen
 )
 from usuario.models import Perfil
+from django.conf import settings
 
 
 class DistritoSerializer(serializers.ModelSerializer):
@@ -35,10 +36,9 @@ class PerfilMinSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.foto.url) if request else obj.foto.url
             except Exception:
                 return obj.foto.url
-        # no foto set
-        from django.conf import settings
-        placeholder = (settings.STATIC_URL or '/') + 'img/profile.jpg'
-        return request.build_absolute_uri(placeholder) if request else placeholder
+        # no foto set -> use default avatar from media/usuarios
+        default_rel = settings.MEDIA_URL + 'usuarios/circulo-azul-usuario-blanco_78370-4707.avif'
+        return request.build_absolute_uri(default_rel) if request else default_rel
 
 
 class ComentarioSerializer(serializers.ModelSerializer):
@@ -331,9 +331,11 @@ class IncidenciaModalSerializer(serializers.ModelSerializer):
                 author = (usuario.user.first_name or '') or usuario.user.email
                 try:
                     request = self.context.get('request') if hasattr(self, 'context') else None
-                    avatar = request.build_absolute_uri(usuario.foto.url) if (request and usuario.foto) else (usuario.foto.url if usuario.foto else '/static/img/profile.jpg')
+                    default_rel = settings.MEDIA_URL + 'usuarios/circulo-azul-usuario-blanco_78370-4707.avif'
+                    avatar = request.build_absolute_uri(usuario.foto.url) if (request and usuario.foto) else (request.build_absolute_uri(default_rel) if request else default_rel) if not usuario.foto else (usuario.foto.url)
                 except Exception:
-                    avatar = usuario.foto.url if getattr(usuario, 'foto', None) else '/static/img/profile.jpg'
+                    default_rel = settings.MEDIA_URL + 'usuarios/circulo-azul-usuario-blanco_78370-4707.avif'
+                    avatar = usuario.foto.url if getattr(usuario, 'foto', None) else default_rel
             # compute likes count and whether the requesting user liked this comment
             try:
                 request = self.context.get('request') if hasattr(self, 'context') else None
@@ -351,10 +353,11 @@ class IncidenciaModalSerializer(serializers.ModelSerializer):
                 # defensive: if model not present or DB error, leave defaults
                 pass
 
+            default_rel = settings.MEDIA_URL + 'usuarios/circulo-azul-usuario-blanco_78370-4707.avif'
             out.append({
                 'id': c.id,
                 'author': author or 'Usuario anónimo',
-                'avatar': avatar or '/static/img/profile.jpg',
+                'avatar': avatar or (request.build_absolute_uri(default_rel) if (request := (self.context.get('request') if hasattr(self, 'context') else None)) else default_rel),
                 'text': c.contenido,
                 'time': c.fecha_creacion,
                 'likes': likes_count,

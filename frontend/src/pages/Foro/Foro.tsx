@@ -6,6 +6,7 @@ import BotonReportar from './components/BotonReportar'
 import foroService from '../../services/foroService'
 import { useCallback } from 'react'
 import { useAuth } from '../../components/auth/AuthProvider'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 const ForoView: React.FC = () => {
   const [posts, setPosts] = useState<any[]>([])
@@ -59,6 +60,10 @@ const ForoView: React.FC = () => {
   }, [])
 
   const { user } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+  // read optional openPostId passed via navigation state
+  const externalOpenId = (location && (location.state as any)?.openPostId) ? (location.state as any).openPostId : null
 
   const handleLike = useCallback(async (postId: number) => {
     // toggle like for current user
@@ -123,7 +128,7 @@ const ForoView: React.FC = () => {
             <div className="flex flex-wrap items-center justify-start gap-4">
               <FiltrosForo onChange={handleFiltersChange} />
             </div>
-            <ListaIncidentes posts={posts} loading={loading} error={error} onLike={handleLike} onApoyar={handleApoyar} />
+            <ListaIncidentes posts={posts} loading={loading} error={error} onLike={handleLike} onApoyar={handleApoyar} externalOpenId={externalOpenId} />
           </div>
         </main>
       </div>

@@ -15,7 +15,7 @@ type Post = {
   estado?: string
 }
 
-const PostsList: React.FC<{ posts: Post[]; onLike?: (id: number) => void; onApoyar?: (id: number) => void }> = ({ posts, onLike, onApoyar }) => {
+const PostsList: React.FC<{ posts: Post[]; onLike?: (id: number) => void; onApoyar?: (id: number) => void; onOpenExternal?: (post: Post) => void; externalOpenId?: number | null }> = ({ posts, onLike, onApoyar, onOpenExternal, externalOpenId = null }) => {
   const [selected, setSelected] = useState<Post | null>(null)
 
   const open = (p: Post) => setSelected(p)
@@ -28,6 +28,14 @@ const PostsList: React.FC<{ posts: Post[]; onLike?: (id: number) => void; onApoy
     if (updated) setSelected(updated)
   }, [posts])
 
+  // allow external opener (e.g., navigate from profile to foro with an id)
+  useEffect(() => {
+    if (onOpenExternal) return // external open handled by parent
+    if (!externalOpenId) return
+    const target = posts.find(p => p.id === externalOpenId)
+    if (target) setSelected(target)
+  }, [externalOpenId, posts, onOpenExternal])
+
   // demo comments per post
   const demoComments = [
     { id: 1, author: 'Juan Pérez', avatar: '/static/img/profile.jpg', text: 'Justo pasé por ahí, confirmo que está bloqueando el carril derecho.', time: 'hace 10 minutos', likes: 15 },
@@ -38,10 +46,11 @@ const PostsList: React.FC<{ posts: Post[]; onLike?: (id: number) => void; onApoy
   return (
     <div className="flex flex-col w-full gap-6">
       {posts.map(p => (
-        <PostCard key={p.id} post={p} onOpen={open} onLike={onLike} onApoyar={onApoyar} />
+        <PostCard key={p.id} post={p} onOpen={onOpenExternal ?? open} onLike={onLike} onApoyar={onApoyar} />
       ))}
 
-      {selected && (
+      {/* render modal only when not using external opener */}
+      {!onOpenExternal && selected && (
         <PostModal post={selected} onClose={close} initialComments={demoComments} onLike={onLike} onApoyar={onApoyar} />
       )}
     </div>

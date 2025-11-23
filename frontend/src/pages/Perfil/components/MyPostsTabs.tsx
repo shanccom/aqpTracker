@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import PostsList from '../../../components/posts/PostsList'
+import { useNavigate } from 'react-router-dom'
 import { getMyAuthoredIncidencias, getMySupportedIncidencias } from '../../../services/authService'
 
 type Post = {
@@ -47,6 +48,11 @@ export default function MyPostsTabs() {
     load()
     return () => { mounted = false }
   }, [])
+  const navigate = useNavigate()
+  const handleOpenFromProfile = (p: Post) => {
+    // navigate to Foro and instruct it to open this post
+    navigate('/Foro', { state: { openPostId: p.id } })
+  }
 
   return (
     <div className="w-full">
@@ -63,11 +69,11 @@ export default function MyPostsTabs() {
   {error && <div className="py-4 text-center text-sm text-red-600">{error}</div>}
 
       {!loading && tab === 'authored' && (
-        authored.length ? <PostsList posts={authored} /> : <div className="py-10 text-center text-gray-500">No has publicado incidentes todavía.</div>
+        authored.length ? <PostsList posts={authored} onOpenExternal={handleOpenFromProfile} /> : <div className="py-10 text-center text-gray-500">No has publicado incidentes todavía.</div>
       )}
 
       {!loading && tab === 'supported' && (
-        supported.length ? <PostsList posts={supported} /> : <div className="py-10 text-center text-gray-500">No has apoyado publicaciones todavía.</div>
+        supported.length ? <PostsList posts={supported} onOpenExternal={handleOpenFromProfile} /> : <div className="py-10 text-center text-gray-500">No has apoyado publicaciones todavía.</div>
       )}
     </div>
   )
