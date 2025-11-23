@@ -39,7 +39,9 @@ const PostModal: React.FC<{ post: Post | null, onClose: () => void, initialComme
 
   if (!post) return null
 
-  const distritoText = post.distrito || ''
+  const distritoText = typeof (post as any).distrito === 'object'
+    ? ((post as any).distrito?.nombre ?? String((post as any).distrito))
+    : (post.distrito || '')
   const direccionText = post.direccion || ''
   const estadoText = typeof (post as any).estado === 'object'
     ? ((post as any).estado?.nombre ?? String((post as any).estado))

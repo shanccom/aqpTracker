@@ -35,6 +35,9 @@ class RegistroSerializer(serializers.ModelSerializer):
         # create profile and set optional fields
         telefono = validated_data.get('telefono', None)
         foto = validated_data.get('foto', None)
+        # if no foto uploaded, assign default avatar located in media/usuarios
+        if not foto:
+            foto = 'usuarios/circulo-azul-usuario-blanco_78370-4707.avif'
         Perfil.objects.create(user=user, telefono=telefono or None, foto=foto)
         return user
     def validate_email(self, value):

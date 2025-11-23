@@ -123,12 +123,47 @@ class IncidenciaViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         incidencia = serializer.save(usuario=perfil)
 
+        # After creating, ensure distrito (if provided) is resolved and estado defaults to 'Activo'
+        try:
+            # try resolve distrito from several possible request keys
+            distrito_obj = None
+            # prefer explicit distrito_id
+            raw_distrito_id = request.data.get('distrito_id') or request.data.get('distrito') or request.data.get('distrito_name')
+            if raw_distrito_id:
+                try:
+                    # if it's numeric id
+                    did = int(raw_distrito_id)
+                    distrito_obj = Distrito.objects.filter(id=did).first()
+                except Exception:
+                    # treat as name
+                    distrito_obj = Distrito.objects.filter(nombre__iexact=str(raw_distrito_id)).first()
+            if distrito_obj:
+                incidencia.distrito = distrito_obj
+                incidencia.save(update_fields=['distrito'])
+        except Exception:
+            # don't break creation on distrito resolution errors
+            pass
+
         # handle multiple uploaded images from the 'imagenes' field (multipart/form-data)
         files = request.FILES.getlist('imagenes') if hasattr(request, 'FILES') else []
         for idx, f in enumerate(files):
             IncidenciaImagen.objects.create(incidencia=incidencia, imagen=f, orden=idx)
 
+        # Ensure default Estado = 'Activo' if none set
+        try:
+            if incidencia.estado is None:
+                default_estado = Estado.objects.filter(nombre__iexact='active').first()
+                if not default_estado:
+                    default_estado = Estado.objects.create(nombre='active')
+                incidencia.estado = default_estado
+                incidencia.save(update_fields=['estado'])
+        except Exception:
+            # ignore failures assigning estado
+            pass
+
         headers = self.get_success_headers(serializer.data)
+        # refresh serializer data to include assigned distrito/estado representations
+        serializer = self.get_serializer(incidencia, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
