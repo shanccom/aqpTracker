@@ -12,4 +12,5 @@ urlpatterns = [
     path('recorrido/<int:recorrido_id>/json/', views.recorrido_json, name='recorrido_json'), #SOLO UN RECORRIDO
     #Algoritmo rutas
     path('buscar-rutas/', views.buscar_rutas_view, name='buscar_rutas'),
+    path('buscar-rutas-combinadas/', views.buscar_rutas_combinadas_view, name='buscar_rutas_combinadas'),
 ]
