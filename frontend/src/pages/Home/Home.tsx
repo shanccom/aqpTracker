@@ -1,8 +1,15 @@
 import { useEffect, useState, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Navigation, Search, Trash2, Locate, Eye, EyeOff } from 'lucide-react';
-import { buscarRutasBackend, type Coordenada, type RutaEncontrada } from '../../api/rutas';
+import { MapPin, Navigation, Search, Trash2, Locate, Eye, EyeOff, Route } from 'lucide-react';
+import { 
+  buscarRutasBackend, 
+  buscarRutasCombinadasBackend,
+  type Coordenada, 
+  type RutaEncontrada,
+  type RutaCombinada,
+  type ResultadoBusqueda 
+} from '../../api/rutas';
 
 // --- Configuración de Iconos ---
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -29,6 +36,14 @@ const iconoB = L.divIcon({
   html: `<div style="background-color: #ef4444; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">B</div>`,
   iconSize: [30, 30],
   iconAnchor: [15, 15]
+});
+
+// Icono para punto de transbordo
+const iconoTransbordo = L.divIcon({
+  className: 'custom-marker-transbordo',
+  html: `<div style="background-color: #8b5cf6; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 10px;">T</div>`,
+  iconSize: [24, 24],
+  iconAnchor: [12, 12]
 });
 
 // Función para formatear distancias
@@ -69,30 +84,33 @@ export default function Home() {
   const [puntoB, setPuntoB] = useState<Coordenada | null>(null);
   const [modoSeleccion, setModoSeleccion] = useState<'A' | 'B'>('A');
   
-  const [rutasEncontradas, setRutasEncontradas] = useState<RutaEncontrada[]>([]);
-  const [rutasVisibles, setRutasVisibles] = useState<{ [key: number]: boolean }>({});
+  const [rutasDirectas, setRutasDirectas] = useState<RutaEncontrada[]>([]);
+  const [rutasCombinadas, setRutasCombinadas] = useState<RutaCombinada[]>([]);
+  const [rutasVisibles, setRutasVisibles] = useState<{ [key: string]: boolean }>({});
   const [loading, setLoading] = useState(false);
+  const [buscandoCombinadas, setBuscandoCombinadas] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mostrarCombinadas, setMostrarCombinadas] = useState(false);
 
   // Referencias del Mapa
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerARef = useRef<L.Marker | null>(null);
   const markerBRef = useRef<L.Marker | null>(null);
-  const polylinesRef = useRef<{ [key: number]: L.Polyline }>({});
+  const polylinesRef = useRef<{ [key: string]: L.Polyline }>({});
+  const markersTransbordoRef = useRef<{ [key: string]: L.Marker }>({});
 
   // 1. Inicializar el mapa
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    const map = L.map(mapContainerRef.current).setView([-16.409047, -71.536952], 14); // Arequipa Centro
+    const map = L.map(mapContainerRef.current).setView([-16.409047, -71.536952], 14);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
       maxZoom: 19
     }).addTo(map);
 
-    // Evento de Click en el mapa
     map.on('click', (e: L.LeafletMouseEvent) => {
       const nuevaCoord = { lat: e.latlng.lat, lng: e.latlng.lng };
       window.dispatchEvent(new CustomEvent('map-click-custom', { detail: nuevaCoord }));
@@ -106,13 +124,13 @@ export default function Home() {
     };
   }, []);
 
-  // 2. Escuchar clicks del mapa (Puente entre Leaflet y React State)
+  // 2. Escuchar clicks del mapa
   useEffect(() => {
     const handleMapClick = (e: any) => {
       const coord = e.detail;
       if (modoSeleccion === 'A') {
         setPuntoA(coord);
-        setModoSeleccion('B'); // Auto-cambiar a B para agilizar
+        setModoSeleccion('B');
       } else {
         setPuntoB(coord);
       }
@@ -145,9 +163,11 @@ export default function Home() {
     }
   }, [puntoA, puntoB]);
 
-  // 4. Dibujar Rutas Encontradas
+  // 4. Dibujar Rutas Encontradas (VERSIÓN CORREGIDA)
   useEffect(() => {
     if (!mapRef.current) return;
+
+    console.log('Actualizando mapa - Rutas visibles:', rutasVisibles);
 
     // Limpiar todas las líneas anteriores
     Object.values(polylinesRef.current).forEach(poly => {
@@ -157,37 +177,126 @@ export default function Home() {
     });
     polylinesRef.current = {};
 
-    if (rutasEncontradas.length > 0) {
-      const bounds = L.latLngBounds([]);
+    // Limpiar TODOS los marcadores de transbordo anteriores
+    Object.values(markersTransbordoRef.current).forEach(marker => {
+      if (marker && mapRef.current) {
+        mapRef.current.removeLayer(marker);
+      }
+    });
+    markersTransbordoRef.current = {};
 
-      rutasEncontradas.forEach(ruta => {
-        // Solo dibujar si la ruta está marcada como visible (por defecto es true)
-        if (rutasVisibles[ruta.id] !== false) {
-          const poly = L.polyline(ruta.coordenadas, {
-            color: ruta.color || '#3388ff',
-            weight: 5,
-            opacity: 0.7
-          }).addTo(mapRef.current!);
+    const bounds = L.latLngBounds([]);
+    let hasVisibleRoutes = false;
 
-          poly.bindPopup(`
-            <b>${ruta.nombre_ruta}</b><br>
-            ${ruta.empresa} (${ruta.sentido})<br>
-            <small>Distancia al destino: ${formatearDistancia(ruta.distancia_a_destino)}</small>
+    // Dibujar rutas directas
+    rutasDirectas.forEach(ruta => {
+      if (rutasVisibles[`directa-${ruta.id}`] !== false) {
+        const poly = L.polyline(ruta.coordenadas, {
+          color: ruta.color || '#3388ff',
+          weight: 6,
+          opacity: 0.8
+        }).addTo(mapRef.current!);
+
+        poly.bindPopup(`
+          <b>${ruta.nombre_ruta}</b><br>
+          ${ruta.empresa} (${ruta.sentido})<br>
+          <small>🚗 Ruta directa</small><br>
+          <small>Distancia al destino: ${formatearDistancia(ruta.distancia_a_destino)}</small>
+        `);
+        
+        polylinesRef.current[`directa-${ruta.id}`] = poly;
+        ruta.coordenadas.forEach(c => bounds.extend(c));
+        hasVisibleRoutes = true;
+      }
+    });
+
+    // Dibujar rutas combinadas
+    if (mostrarCombinadas) {
+      rutasCombinadas.forEach(combinada => {
+        const rutaKey = `combinada-${combinada.id}`;
+        
+        if (rutasVisibles[rutaKey] !== false) {
+          // Dibujar cada segmento de la ruta combinada
+          combinada.rutas.forEach((segmento, index) => {
+            const color = index === 0 ? '#8b5cf6' : '#ec4899';
+            const poly = L.polyline(segmento.segmento_coordenadas, {
+              color: color,
+              weight: 5,
+              opacity: 0.7,
+              dashArray: index === 0 ? null : '5, 5'
+            }).addTo(mapRef.current!);
+
+            poly.bindPopup(`
+              <b>${segmento.ruta.nombre_ruta}</b><br>
+              ${segmento.ruta.empresa} (${segmento.ruta.sentido})<br>
+              <small>🔄 Segmento ${index + 1} de ruta combinada</small><br>
+              <small>Distancia: ${formatearDistancia(segmento.distancia)}</small>
+            `);
+            
+            polylinesRef.current[`${rutaKey}-segmento-${index}`] = poly;
+            segmento.segmento_coordenadas.forEach(c => bounds.extend(c));
+          });
+
+          // Agregar marcador de transbordo SOLO si la ruta está visible
+          const transbordoMarker = L.marker(
+            [combinada.punto_transbordo.lat, combinada.punto_transbordo.lng], 
+            { icon: iconoTransbordo }
+          ).addTo(mapRef.current!);
+          
+          transbordoMarker.bindPopup(`
+            <b>📍 Punto de Transbordo</b><br>
+            <small>Cambio de combi aquí</small><br>
+            <small>Distancia: ${formatearDistancia(combinada.distancia_transbordo || 0)}</small>
           `);
           
-          polylinesRef.current[ruta.id] = poly;
+          markersTransbordoRef.current[rutaKey] = transbordoMarker;
+          bounds.extend([combinada.punto_transbordo.lat, combinada.punto_transbordo.lng]);
+          hasVisibleRoutes = true;
           
-          // Agregar coordenadas a los límites para hacer zoom fit
-          ruta.coordenadas.forEach(c => bounds.extend(c));
+          console.log(`Marcador de transbordo agregado para: ${rutaKey}`);
+        } else {
+          console.log(`Ruta combinada ${rutaKey} está oculta, no dibujar`);
         }
       });
-
-      // Ajustar vista para ver todas las rutas visibles
-      if (bounds.isValid()) {
-        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
-      }
     }
-  }, [rutasEncontradas, rutasVisibles]);
+
+    // Ajustar vista si hay rutas visibles
+    if (hasVisibleRoutes && bounds.isValid()) {
+      mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+    } else {
+      // Si no hay rutas visibles, centrar en Arequipa
+      mapRef.current.setView([-16.409047, -71.536952], 14);
+    }
+  }, [rutasDirectas, rutasCombinadas, rutasVisibles, mostrarCombinadas]);
+
+  // 5. Efecto para limpiar TODO cuando se limpia el mapa
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Si no hay puntos A y B, limpiar todo
+    if (!puntoA && !puntoB) {
+      console.log('Limpiando mapa - sin puntos A y B');
+      
+      // Limpiar polylines
+      Object.values(polylinesRef.current).forEach(poly => {
+        if (poly && mapRef.current) {
+          mapRef.current.removeLayer(poly);
+        }
+      });
+      polylinesRef.current = {};
+
+      // Limpiar marcadores de transbordo
+      Object.values(markersTransbordoRef.current).forEach(marker => {
+        if (marker && mapRef.current) {
+          mapRef.current.removeLayer(marker);
+        }
+      });
+      markersTransbordoRef.current = {};
+
+      // Resetear estado de combinadas
+      setMostrarCombinadas(false);
+    }
+  }, [puntoA, puntoB]);
 
   // --- Función para Geolocalización ---
   const handleUsarUbicacion = (e: React.MouseEvent) => {
@@ -222,79 +331,171 @@ export default function Home() {
   };
 
   // --- Funciones de Visibilidad ---
-  const toggleVisibilidadRuta = (rutaId: number) => {
-    setRutasVisibles(prev => ({
-      ...prev,
-      [rutaId]: !prev[rutaId]
-    }));
+  const toggleVisibilidadRuta = (rutaId: string) => {
+    console.log(`Alternando visibilidad de: ${rutaId}`);
+    
+    setRutasVisibles(prev => {
+      const nuevoEstado = {
+        ...prev,
+        [rutaId]: !prev[rutaId]
+      };
+      
+      console.log('Nuevo estado de visibilidad:', nuevoEstado);
+      return nuevoEstado;
+    });
   };
 
   const mostrarTodasLasRutas = () => {
-    const nuevasVisibilidades: { [key: number]: boolean } = {};
-    rutasEncontradas.forEach(ruta => {
-      nuevasVisibilidades[ruta.id] = true;
+    const nuevasVisibilidades: { [key: string]: boolean } = {};
+    
+    rutasDirectas.forEach(ruta => {
+      nuevasVisibilidades[`directa-${ruta.id}`] = true;
     });
+    
+    rutasCombinadas.forEach(combinada => {
+      nuevasVisibilidades[`combinada-${combinada.id}`] = true;
+    });
+    
     setRutasVisibles(nuevasVisibilidades);
   };
 
   const ocultarTodasLasRutas = () => {
-    const nuevasVisibilidades: { [key: number]: boolean } = {};
-    rutasEncontradas.forEach(ruta => {
-      nuevasVisibilidades[ruta.id] = false;
+    const nuevasVisibilidades: { [key: string]: boolean } = {};
+    
+    rutasDirectas.forEach(ruta => {
+      nuevasVisibilidades[`directa-${ruta.id}`] = false;
     });
+    
+    rutasCombinadas.forEach(combinada => {
+      nuevasVisibilidades[`combinada-${combinada.id}`] = false;
+    });
+    
     setRutasVisibles(nuevasVisibilidades);
   };
 
-  // --- Lógica de Negocio ---
+  // --- Lógica de Búsqueda ---
+  const buscarRutasCombinadas = async () => {
+    if (!puntoA || !puntoB) return;
+    
+    console.log('Iniciando búsqueda de rutas combinadas...');
+    setBuscandoCombinadas(true);
+    setError(null);
+
+    try {
+      // Limpiar rutas combinadas anteriores y sus marcadores
+      setRutasCombinadas([]);
+      setMostrarCombinadas(false);
+      
+      // Pequeño delay para asegurar la limpieza
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const resultados = await buscarRutasCombinadasBackend(puntoA, puntoB);
+      console.log('Rutas combinadas encontradas:', resultados.length);
+      
+      if (resultados && resultados.length > 0) {
+        setRutasCombinadas(resultados);
+        setMostrarCombinadas(true);
+        
+        // Hacer visibles todas las rutas combinadas por defecto
+        const nuevasVisibilidades = { ...rutasVisibles };
+        resultados.forEach((combinada: RutaCombinada) => {
+          nuevasVisibilidades[`combinada-${combinada.id}`] = true;
+        });
+        setRutasVisibles(nuevasVisibilidades);
+        
+        console.log('Rutas combinadas configuradas como visibles');
+      } else {
+        setError("No se encontraron rutas combinadas posibles. Intenta con puntos diferentes.");
+      }
+    } catch (err: any) {
+      console.error('Error al buscar rutas combinadas:', err);
+      
+      if (err.response?.data?.error) {
+        setError(`Error del servidor: ${err.response.data.error}`);
+      } else if (err.code === 'ECONNABORTED') {
+        setError("La búsqueda está tomando demasiado tiempo. Intenta con puntos más cercanos.");
+      } else {
+        setError("Error al conectar con el servidor. Verifica tu conexión.");
+      }
+    } finally {
+      setBuscandoCombinadas(false);
+    }
+  };
+
   const handleBuscar = async () => {
     if (!puntoA || !puntoB) return;
     
+    console.log('Iniciando búsqueda directa...', { puntoA, puntoB });
     setLoading(true);
     setError(null);
-    setRutasEncontradas([]);
+    setRutasDirectas([]);
+    setRutasCombinadas([]);
     setRutasVisibles({});
+    setMostrarCombinadas(false);
 
     try {
-      const resultados = await buscarRutasBackend(puntoA, puntoB);
+      console.log('Llamando a buscarRutasBackend...');
+      const resultados: ResultadoBusqueda = await buscarRutasBackend(puntoA, puntoB);
+      console.log('Respuesta recibida:', resultados);
       
-      // Ordenar rutas: primero las que llegan más cerca del destino
-      const rutasOrdenadas = [...resultados].sort((a, b) => {
-        return a.distancia_a_destino - b.distancia_a_destino;
+      setRutasDirectas(resultados.rutas_directas);
+      
+      // Hacer visibles todas las rutas directas por defecto
+      const nuevasVisibilidades: { [key: string]: boolean } = {};
+      resultados.rutas_directas.forEach(ruta => {
+        nuevasVisibilidades[`directa-${ruta.id}`] = true;
       });
-      
-      setRutasEncontradas(rutasOrdenadas);
-      
-      // Por defecto, todas las rutas son visibles
-      const visibilidadesIniciales: { [key: number]: boolean } = {};
-      rutasOrdenadas.forEach(ruta => {
-        visibilidadesIniciales[ruta.id] = true;
-      });
-      setRutasVisibles(visibilidadesIniciales);
-      
-      if (rutasOrdenadas.length === 0) {
-        setError("No se encontraron rutas que pasen cerca de ambos puntos (Radio 500m).");
+      setRutasVisibles(nuevasVisibilidades);
+
+      console.log(`Encontradas ${resultados.rutas_directas.length} rutas directas`);
+
+      if (resultados.rutas_directas.length === 0) {
+        setError("No se encontraron rutas directas. Presiona 'Buscar Combinadas' para ver opciones con transbordo.");
       }
-    } catch (err) {
-      console.error(err);
-      setError("Ocurrió un error al conectar con el servidor.");
+    } catch (err: any) {
+      console.error('Error en handleBuscar:', err);
+      
+      if (err.response?.data?.error) {
+        setError(`Error del servidor: ${err.response.data.error}`);
+      } else if (err.code === 'ECONNABORTED') {
+        setError("La búsqueda está tomando demasiado tiempo.");
+      } else {
+        setError("Error al conectar con el servidor. Verifica tu conexión.");
+      }
+      
+      // Forzar reset de estados en caso de error
+      setRutasDirectas([]);
+      setRutasCombinadas([]);
     } finally {
       setLoading(false);
+      console.log('Búsqueda finalizada');
     }
   };
 
   const limpiarMapa = () => {
+    console.log('Limpiando mapa completamente');
+    
+    // Limpiar estados
     setPuntoA(null);
     setPuntoB(null);
-    setRutasEncontradas([]);
+    setRutasDirectas([]);
+    setRutasCombinadas([]);
     setRutasVisibles({});
     setModoSeleccion('A');
     setError(null);
+    setMostrarCombinadas(false);
+    
+    // Limpiar referencias del mapa
+    if (mapRef.current) {
+      // Centrar mapa en Arequipa
+      mapRef.current.setView([-16.409047, -71.536952], 14);
+    }
   };
 
   // Contadores por tipo de ruta
-  const rutasDirectas = rutasEncontradas.filter(r => r.distancia_a_destino <= 50).length;
-  const rutasCercanas = rutasEncontradas.filter(r => r.distancia_a_destino > 50 && r.distancia_a_destino <= 200).length;
-  const rutasAproximadas = rutasEncontradas.filter(r => r.distancia_a_destino > 200).length;
+  const rutasDirectasCount = rutasDirectas.filter(r => r.distancia_a_destino <= 50).length;
+  const rutasCercanasCount = rutasDirectas.filter(r => r.distancia_a_destino > 50 && r.distancia_a_destino <= 200).length;
+  const rutasAproximadasCount = rutasDirectas.filter(r => r.distancia_a_destino > 200).length;
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -354,32 +555,55 @@ export default function Home() {
           </div>
 
           {/* Botones de Acción */}
-          <div className="flex gap-3">
-            <button
-              onClick={handleBuscar}
-              disabled={!puntoA || !puntoB || loading}
-              className="flex-1 bg-gradient-to-r from-red-500 to-orange-500 text-white py-3 px-4 rounded-lg font-bold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Buscando...</span>
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Search size={18} />
-                  <span>Buscar Rutas</span>
-                </span>
-              )}
-            </button>
-            
-            <button
-              onClick={limpiarMapa}
-              className="p-3 text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 hover:text-red-500 transition-colors"
-              title="Limpiar mapa"
-            >
-              <Trash2 size={20} />
-            </button>
+          <div className="space-y-3">
+            <div className="flex gap-3">
+              <button
+                onClick={handleBuscar}
+                disabled={!puntoA || !puntoB || loading}
+                className="flex-1 bg-gradient-to-r from-red-500 to-orange-500 text-white py-3 px-4 rounded-lg font-bold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Buscando...</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Search size={18} />
+                    <span>Buscar Rutas</span>
+                  </span>
+                )}
+              </button>
+              
+              <button
+                onClick={limpiarMapa}
+                className="p-3 text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 hover:text-red-500 transition-colors"
+                title="Limpiar mapa"
+              >
+                <Trash2 size={20} />
+              </button>
+            </div>
+
+            {/* Botón para buscar rutas combinadas */}
+            {rutasDirectas.length === 0 && !mostrarCombinadas && (
+              <button
+                onClick={buscarRutasCombinadas}
+                disabled={!puntoA || !puntoB || buscandoCombinadas}
+                className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white py-3 px-4 rounded-lg font-bold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+              >
+                {buscandoCombinadas ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Buscando Combinadas...</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Route size={18} />
+                    <span>Buscar Rutas Combinadas</span>
+                  </span>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Mensajes de Error */}
@@ -389,28 +613,28 @@ export default function Home() {
             </div>
           )}
 
-          {/* Lista de Resultados */}
-          {rutasEncontradas.length > 0 && (
+          {/* Lista de Resultados - Rutas Directas */}
+          {rutasDirectas.length > 0 && (
             <div className="space-y-3">
               <div className="flex justify-between items-center border-b pb-2">
                 <div>
                   <h3 className="font-bold text-gray-800">
-                    {rutasEncontradas.length} Rutas encontradas
+                    {rutasDirectas.length} Rutas directas
                   </h3>
                   <div className="flex gap-2 mt-1">
-                    {rutasDirectas > 0 && (
+                    {rutasDirectasCount > 0 && (
                       <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                        {rutasDirectas} directas
+                        {rutasDirectasCount} directas
                       </span>
                     )}
-                    {rutasCercanas > 0 && (
+                    {rutasCercanasCount > 0 && (
                       <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
-                        {rutasCercanas} cercanas
+                        {rutasCercanasCount} cercanas
                       </span>
                     )}
-                    {rutasAproximadas > 0 && (
+                    {rutasAproximadasCount > 0 && (
                       <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                        {rutasAproximadas} aproximadas
+                        {rutasAproximadasCount} aproximadas
                       </span>
                     )}
                   </div>
@@ -432,13 +656,13 @@ export default function Home() {
                   </button>
                 </div>
               </div>
-              {rutasEncontradas.map((ruta) => {
+              {rutasDirectas.map((ruta) => {
                 const tipoInfo = obtenerTipoRuta(ruta.distancia_a_destino);
                 return (
                   <div 
-                    key={ruta.id} 
+                    key={`directa-${ruta.id}`} 
                     className={`bg-white p-3 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all ${
-                      rutasVisibles[ruta.id] === false ? 'opacity-50 bg-gray-50' : ''
+                      rutasVisibles[`directa-${ruta.id}`] === false ? 'opacity-50 bg-gray-50' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -453,11 +677,11 @@ export default function Home() {
                         </div>
                       </div>
                       <button
-                        onClick={() => toggleVisibilidadRuta(ruta.id)}
+                        onClick={() => toggleVisibilidadRuta(`directa-${ruta.id}`)}
                         className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
-                        title={rutasVisibles[ruta.id] === false ? "Mostrar ruta" : "Ocultar ruta"}
+                        title={rutasVisibles[`directa-${ruta.id}`] === false ? "Mostrar ruta" : "Ocultar ruta"}
                       >
-                        {rutasVisibles[ruta.id] === false ? (
+                        {rutasVisibles[`directa-${ruta.id}`] === false ? (
                           <EyeOff size={18} />
                         ) : (
                           <Eye size={18} />
@@ -472,8 +696,8 @@ export default function Home() {
                         {ruta.sentido}
                       </span>
                       <span className={`text-xs font-bold px-2 py-1 rounded-full border ${tipoInfo.badge}`}>
-                        {tipoInfo.tipo === 'directa' ? ' Directa' : 
-                         tipoInfo.tipo === 'cercana' ? ' Cercana' : ' Aproximada'}
+                        {tipoInfo.tipo === 'directa' ? '🚗 Directa' : 
+                         tipoInfo.tipo === 'cercana' ? '🚶 Cercana' : '📍 Aproximada'}
                       </span>
                     </div>
 
@@ -490,12 +714,118 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {rutasVisibles[ruta.id] === false && (
+                    {rutasVisibles[`directa-${ruta.id}`] === false && (
                       <p className="text-xs text-gray-400 mt-2">Ruta oculta en el mapa</p>
                     )}
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Lista de Resultados - Rutas Combinadas */}
+          {mostrarCombinadas && rutasCombinadas.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex justify-between items-center border-b pb-2">
+                <div>
+                  <h3 className="font-bold text-gray-800">
+                    {rutasCombinadas.length} Rutas combinadas
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Con transbordo - Tiempo estimado incluido
+                  </p>
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={mostrarTodasLasRutas}
+                    className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 transition-colors"
+                    title="Mostrar todas las rutas"
+                  >
+                    Todas
+                  </button>
+                  <button
+                    onClick={ocultarTodasLasRutas}
+                    className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 transition-colors"
+                    title="Ocultar todas las rutas"
+                  >
+                    Ninguna
+                  </button>
+                  <button
+                    onClick={() => setMostrarCombinadas(false)}
+                    className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 transition-colors"
+                    title="Ocultar rutas combinadas"
+                  >
+                    Sin Combinadas
+                  </button>
+                </div>
+              </div>
+              {rutasCombinadas.map((combinada) => (
+                <div 
+                  key={`combinada-${combinada.id}`} 
+                  className={`bg-white p-3 rounded-lg border border-purple-200 shadow-sm hover:shadow-md transition-all ${
+                    rutasVisibles[`combinada-${combinada.id}`] === false ? 'opacity-50 bg-gray-50' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Route className="text-purple-500" size={16} />
+                      <h4 className="font-bold text-gray-800">Ruta Combinada</h4>
+                    </div>
+                    <button
+                      onClick={() => toggleVisibilidadRuta(`combinada-${combinada.id}`)}
+                      className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+                      title={rutasVisibles[`combinada-${combinada.id}`] === false ? "Mostrar ruta" : "Ocultar ruta"}
+                    >
+                      {rutasVisibles[`combinada-${combinada.id}`] === false ? (
+                        <EyeOff size={18} />
+                      ) : (
+                        <Eye size={18} />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Segmentos de la ruta combinada */}
+                  <div className="space-y-2 mb-3">
+                    {combinada.rutas.map((segmento, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                        <div className="w-2 h-8 rounded-full" style={{ backgroundColor: segmento.ruta.color }}></div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-800">
+                            {segmento.ruta.nombre_ruta} ({segmento.ruta.empresa})
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Segmento {index + 1} • {formatearDistancia(segmento.distancia)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="text-xs text-gray-600 space-y-1">
+                    <div className="flex justify-between">
+                      <span>Distancia total:</span>
+                      <span className="font-medium">{formatearDistancia(combinada.distancia_total)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Tiempo estimado:</span>
+                      <span className="font-medium text-purple-600">{combinada.tiempo_estimado_minutos} min</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Distancia de transbordo:</span>
+                      <span className={`font-medium ${
+                        (combinada.distancia_transbordo || 0) <= 50 ? 'text-green-600' : 
+                        (combinada.distancia_transbordo || 0) <= 100 ? 'text-yellow-600' : 'text-orange-600'
+                      }`}>
+                        {formatearDistancia(combinada.distancia_transbordo || 0)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {rutasVisibles[`combinada-${combinada.id}`] === false && (
+                    <p className="text-xs text-gray-400 mt-2">Ruta oculta en el mapa</p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
