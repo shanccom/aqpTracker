@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ArrowLeft, MapPin, Navigation, ArrowRight,  } from 'lucide-react';
+import { ArrowLeft, MapPin, Navigation, ArrowRight, Clock, Star, Users } from 'lucide-react';
 // Fix para los iconos de Leaflet
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -15,7 +15,7 @@ let DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Interfaces
+// Interfaces (No modificadas, asumo que están en src/types en una aplicación real)
 interface Paradero {
   nombre: string;
   latitud: number;
@@ -49,6 +49,7 @@ interface RutaDetailProps {
 const API_BASE_URL = 'http://localhost:8000';
 
 const RutaDetail = ({ rutaId, onBack }: RutaDetailProps) => {
+  // --- LÓGICA EXISTENTE NO MODIFICADA ---
   const [rutaCompleta, setRutaCompleta] = useState<RutaCompleta | null>(null);
   const [tipoActivo, setTipoActivo] = useState<'IDA' | 'VUELTA'>('IDA');
   const [loading, setLoading] = useState(true);
@@ -58,8 +59,9 @@ const RutaDetail = ({ rutaId, onBack }: RutaDetailProps) => {
   const polylineRef = useRef<L.Polyline | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
 
+  // Lógica de Fetching (se mantiene)
   useEffect(() => {
-    const fetchRuta = async () => {
+    const fetchRuta = async () => { /* ... código de fetching ... */ 
       try {
         setLoading(true);
         const response = await fetch(`${API_BASE_URL}/api/rutas/ruta/${rutaId}/json/`);
@@ -72,32 +74,26 @@ const RutaDetail = ({ rutaId, onBack }: RutaDetailProps) => {
         setLoading(false);
       }
     };
-
     fetchRuta();
   }, [rutaId]);
 
+  // Lógica de Inicialización de Leaflet (se mantiene)
   useEffect(() => {
     if (!mapContainerRef.current) return;
-
     const map = L.map(mapContainerRef.current).setView([-16.4090, -71.5375], 13);
-
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
       maxZoom: 19
     }).addTo(map);
-
     mapRef.current = map;
-
-    setTimeout(() => {
-      mapRef.current?.invalidateSize();
-    }, 300);
-
+    setTimeout(() => { mapRef.current?.invalidateSize(); }, 300);
     return () => {
       mapRef.current?.remove();
       mapRef.current = null;
     };
   }, [rutaCompleta]);
 
+  // Lógica de Dibujado de Recorrido (se mantiene)
   useEffect(() => {
     if (!mapRef.current || !rutaCompleta) return;
 
@@ -115,14 +111,14 @@ const RutaDetail = ({ rutaId, onBack }: RutaDetailProps) => {
     polylineRef.current = L.polyline(coordinates, {
       color,
       weight: recorrido.grosor_linea || 4,
-      opacity: 0.7
+      opacity: 0.8
     }).addTo(mapRef.current);
 
     recorrido.paraderos.forEach((paradero, index) => {
       const marker = L.marker([paradero.latitud, paradero.longitud], {
         icon: L.divIcon({
           className: 'custom-marker',
-          html: `<div style="background-color: ${color}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${index + 1}</div>`,
+          html: `<div style="background-color: ${color}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">${index + 1}</div>`,
           iconSize: [28, 28],
           iconAnchor: [14, 14]
         })
@@ -140,21 +136,21 @@ const RutaDetail = ({ rutaId, onBack }: RutaDetailProps) => {
       });
     }
   }, [rutaCompleta, tipoActivo]);
+  // --- FIN DE LA LÓGICA EXISTENTE ---
 
+
+  // --- MANEJO DE ESTADOS DE CARGA/ERROR (Mejorado) ---
 
   if (loading) {
+    // Se mantiene el loading, pero se hace más limpio
     return (
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <button 
-          onClick={onBack} 
-          className="flex items-center gap-2 text-gray-600 hover:text-red-600 font-medium mb-6 transition-colors duration-200 group"
-        >
-          <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform duration-200" />
-          <span>Volver a rutas</span>
+        <button onClick={onBack} className="text-gray-500 hover:text-red-500 font-medium mb-6">
+            <ArrowLeft size={20} className="inline mr-2" /> Volver a rutas
         </button>
-        <div className="flex flex-col justify-center items-center p-12">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <div className="text-lg font-medium text-gray-600">Cargando ruta...</div>
+        <div className="flex flex-col justify-center items-center p-20 bg-gray-50 rounded-xl shadow-sm h-96">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <div className="text-lg font-medium text-gray-600">Cargando detalles de la ruta...</div>
         </div>
       </div>
     );
@@ -163,166 +159,154 @@ const RutaDetail = ({ rutaId, onBack }: RutaDetailProps) => {
   if (error || !rutaCompleta) {
     return (
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <button 
-          onClick={onBack} 
-          className="flex items-center gap-2 text-gray-600 hover:text-red-600 font-medium mb-6 transition-colors duration-200 group"
-        >
-          <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform duration-200" />
-          <span>Volver a rutas</span>
+        <button onClick={onBack} className="text-gray-500 hover:text-red-500 font-medium mb-6">
+            <ArrowLeft size={20} className="inline mr-2" /> Volver a rutas
         </button>
-        <div className="max-w-2xl mx-auto mt-8">
-          <div className="bg-red-50 border-l-4 border-red-500 px-6 py-4 rounded-lg shadow-sm">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-red-800">Error al cargar la ruta</p>
-                <p className="text-sm text-red-700 mt-1">{error || 'No se encontró la ruta'}</p>
-              </div>
-            </div>
-          </div>
+        <div className="bg-red-100 border-l-4 border-red-500 p-4 rounded-lg mt-8 shadow-sm">
+          <p className="text-red-800 font-semibold">Error de Carga</p>
+          <p className="text-red-700 mt-1 text-sm">{error || 'No se encontró información para esta ruta.'}</p>
         </div>
       </div>
     );
   }
 
+  // --- CÁLCULOS PARA LA UI ---
   const recorridoActual = rutaCompleta.recorridos.find(r => r.sentido === tipoActivo);
+  
+  // Paraderos populares: Se mantiene la lógica, se usa para la vista.
   const paraderosPopulares = recorridoActual?.paraderos
     .filter(p => p.es_popular)
     .sort((a, b) => a.orden - b.orden)
     .slice(0, 5) || [];
+
+  // Datos para el panel de información
+  const totalParaderos = recorridoActual?.paraderos.length || 0;
+  const colorLinea = recorridoActual?.color_linea || (tipoActivo === 'IDA' ? '#3b82f6' : '#ef4444');
+  const colorFondo = tipoActivo === 'IDA' ? 'bg-blue-600' : 'bg-red-600';
+
+
+  // --- RENDERIZADO PRINCIPAL (MEJORADO) ---
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
       {/* Botón volver */}
       <button 
         onClick={onBack} 
-        className="flex items-center gap-2 text-gray-600 hover:text-red-600 font-medium mb-6 transition-colors duration-200 group"
+        className="flex items-center gap-2 text-gray-500 hover:text-orange-600 font-medium mb-8 transition-colors duration-200 group"
       >
         <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform duration-200" />
-        <span>Volver a rutas</span>
+        <span>Volver a Rutas</span>
       </button>
 
       {/* Contenedor principal */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
-        {/* Header con información de la ruta */}
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-start gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-orange-400 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
-              <Navigation size={28} className="text-white" strokeWidth={2.5} />
-            </div>
-            <div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-1">{rutaCompleta.nombre}</h2>
-              <div className="flex items-center gap-3">
-                {rutaCompleta.codigo && (
-                  <span className="bg-gradient-to-r from-red-500 to-orange-400 text-white text-sm font-bold px-3 py-1 rounded-full shadow-sm">
-                    {rutaCompleta.empresa}
-                  </span>
-                )}
-
-              </div>
-            </div>
-          </div>
-          
-          {/* Botones IDA/VUELTA */}
-          <div className="flex gap-3">
-            <button
-              onClick={() => setTipoActivo('IDA')}
-              className={`flex items-center gap-2 px-5 py-3 rounded-lg font-medium transition-all duration-200 shadow-sm ${
-                tipoActivo === 'IDA' 
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <ArrowRight size={18} />
-              <span>IDA</span>
-            </button>
-            <button
-              onClick={() => setTipoActivo('VUELTA')}
-              className={`flex items-center gap-2 px-5 py-3 rounded-lg font-medium transition-all duration-200 shadow-sm ${
-                tipoActivo === 'VUELTA' 
-                  ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <ArrowLeft size={18} />
-              <span>VUELTA</span>
-            </button>
+      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+        
+        {/* Header con información de la ruta (Más limpio y clave) */}
+        <div className="mb-6 pb-6 border-b border-gray-200">
+          <h1 className="text-4xl font-extrabold text-gray-900 mb-2">{rutaCompleta.nombre}</h1>
+          <div className="flex items-center gap-4 text-gray-500 text-lg font-medium">
+            <Navigation size={20} className="text-orange-500" />
+            <span>Empresa: <strong className="text-gray-800">{rutaCompleta.empresa}</strong></span>
+            {rutaCompleta.codigo && (
+              <span className="bg-gray-200 text-gray-700 text-sm font-bold px-3 py-1 rounded-full">
+                CÓDIGO: {rutaCompleta.codigo}
+              </span>
+            )}
           </div>
         </div>
-
+        
         {/* Contenedor del mapa y sidebar */}
-        <div className="flex gap-6">
-          {/* Mapa */}
-          <div className="flex-1 rounded-xl overflow-hidden border border-gray-200 shadow-sm" style={{ minHeight: '600px' }}>
+        <div className="flex flex-col lg:flex-row gap-6">
+          
+          {/* Mapa (Ancho completo en pantallas pequeñas, flexible en grandes) */}
+          <div className="flex-1 order-2 lg:order-1 rounded-xl overflow-hidden shadow-lg border-2 border-gray-200" style={{ minHeight: '60vh', maxHeight: '700px' }}>
             <div 
               ref={mapContainerRef} 
               className="w-full h-full"
-              style={{ minHeight: '600px', height: '600px' }}
+              style={{ minHeight: '60vh', height: '100%' }}
             />
           </div>
 
-          {/* Sidebar */}
-          <div className="w-80 space-y-4">
-            {/* Paraderos Populares */}
-            <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl shadow-sm border border-orange-200 p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <h3 className="text-lg font-bold text-gray-800">Paraderos Populares</h3>
+          {/* Sidebar (Panel de Control y Detalles) */}
+          <div className="w-full lg:w-96 order-1 lg:order-2 space-y-6">
+            
+            {/* Control de Sentido (Botones IDA/VUELTA mejorados) */}
+            <div className={`p-4 rounded-xl shadow-md border ${tipoActivo === 'IDA' ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'}`}>
+                <p className="text-lg font-semibold mb-3 text-gray-800">Seleccionar Sentido:</p>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => setTipoActivo('IDA')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold transition-all duration-200 w-full justify-center ${
+                            tipoActivo === 'IDA' 
+                                ? 'bg-blue-600 text-white shadow-lg transform scale-105' 
+                                : 'bg-gray-200 text-gray-700 hover:bg-blue-100'
+                        }`}
+                    >
+                        <ArrowRight size={18} />
+                        <span>RUTA IDA</span>
+                    </button>
+                    <button
+                        onClick={() => setTipoActivo('VUELTA')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold transition-all duration-200 w-full justify-center ${
+                            tipoActivo === 'VUELTA' 
+                                ? 'bg-red-600 text-white shadow-lg transform scale-105' 
+                                : 'bg-gray-200 text-gray-700 hover:bg-red-100'
+                        }`}
+                    >
+                        <ArrowLeft size={18} />
+                        <span>VUELTA</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Información del recorrido (Panel de Métricas) */}
+            <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
+                    <Clock size={24} className="text-orange-500 mx-auto mb-1" />
+                    <p className="text-xl font-bold text-gray-800">{totalParaderos}</p>
+                    <p className="text-xs text-gray-500">Paraderos totales</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
+                    <div className="w-6 h-6 rounded-full mx-auto mb-1" style={{ backgroundColor: colorLinea }}></div>
+                    <p className="text-xl font-bold text-gray-800">{tipoActivo}</p>
+                    <p className="text-xs text-gray-500">Sentido Activo</p>
+                </div>
+            </div>
+
+
+            {/* Lista de Paraderos Populares (Timeline visual) */}
+            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-5">
+              <div className="flex items-center gap-2 mb-4 border-b pb-3">
+                <Star size={20} className="text-yellow-500 fill-yellow-500" />
+                <h3 className="text-lg font-bold text-gray-800">Paraderos Clave</h3>
               </div>
               
               {paraderosPopulares.length > 0 ? (
-                <div className="space-y-3">
+                <ol className="relative border-l border-gray-300 ml-4">                  
                   {paraderosPopulares.map((paradero, index) => (
-                    <div
+                    <li 
                       key={`${paradero.latitud}-${paradero.longitud}-${index}`}
-                      className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-all duration-200 border border-orange-100"
+                      className="mb-4 ml-6"
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 text-white text-sm font-bold rounded-full flex items-center justify-center shadow-sm">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm text-gray-800 leading-tight">{paradero.nombre}</p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {paradero.distancia_metros && ` • ${Math.round(paradero.distancia_metros)}m lejos de la ruta`}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                      <span className="absolute flex items-center justify-center w-6 h-6 rounded-full -left-3 ring-4 ring-white shadow-md" style={{ backgroundColor: colorLinea }}>
+                        <MapPin size={12} className="text-white"/>
+                      </span>
+                      <p className="font-semibold text-sm text-gray-800 leading-tight">{paradero.nombre}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {paradero.distancia_metros && `~ ${Math.round(paradero.distancia_metros)}m de distancia`}
+                      </p>
+                    </li>
                   ))}
-                </div>
+                </ol>
               ) : (
-                <div className="text-center py-6">
-                  <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <MapPin size={28} className="text-orange-400" />
-                  </div>
-                  <p className="text-gray-600 text-sm">No hay datos de popularidad disponibles</p>
+                <div className="text-center py-4 bg-gray-50 rounded-lg">
+                  <p className="text-gray-500 text-sm flex items-center justify-center gap-1">
+                    <Users size={16} /> No hay paraderos populares definidos.
+                  </p>
                 </div>
               )}
             </div>
 
-            {/* Información del recorrido */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <h3 className="text-lg font-bold text-gray-800">Información del recorrido</h3>
-              </div>
-              
-              <div className="space-y-3">
-                <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                  <span className="text-sm font-medium text-gray-600">Tipo:</span>
-                  <span className={`text-sm font-bold px-3 py-1 rounded-full ${
-                    tipoActivo === 'IDA' 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'bg-red-100 text-red-700'
-                  }`}>
-                    {tipoActivo}
-                  </span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

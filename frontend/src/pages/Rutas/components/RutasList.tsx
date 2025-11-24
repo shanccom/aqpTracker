@@ -1,182 +1,172 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Route, MapPin, Navigation } from 'lucide-react';
+import { ArrowLeft, Route, Clock, Navigation } from 'lucide-react';
+
+// ⚠️ IMPORTACIONES DE IMÁGENES DE EMPRESA ⚠️
+// Nota: Las rutas deben ser correctas (subir tres niveles: ../../../)
+import logoBusCharacato from '../../../assets/ImagenesRutaBuses/BusCharacato/logo.png';
+import logoCotum from '../../../assets/ImagenesRutaBuses/Cotum/logo.png';
+import logoTransCayma from '../../../assets/ImagenesRutaBuses/TransCayma/logo.png';
+import logoUnionAqp from '../../../assets/ImagenesRutaBuses/UnionAqp/logo.png';
+
+// --- MAPA DE RECURSOS (RESOURCE MAP) ---
+// CLAVES ESTANDARIZADAS: MINÚSCULAS Y SIN ESPACIOS.
+const EMPRESA_IMAGES_MAP: { [key: string]: string } = {
+    "cotum": logoCotum,
+    "transcayma": logoTransCayma,
+    "buscharacato": logoBusCharacato,
+    "unionaqp": logoUnionAqp,
+};
+
+// Función para simplificar y obtener la imagen por nombre de empresa
+const getEmpresaRouteImage = (empresaNombre?: string) => {
+    const defaultImage = EMPRESA_IMAGES_MAP["cotum"]; 
+
+    if (empresaNombre) {
+        // 1. Estandariza el nombre de la empresa para la búsqueda
+        const claveEstandarizada = empresaNombre.toLowerCase().replace(/\s/g, ''); 
+        
+        // 2. Busca la imagen con la clave estandarizada
+        if (EMPRESA_IMAGES_MAP[claveEstandarizada]) {
+            return EMPRESA_IMAGES_MAP[claveEstandarizada];
+        }
+    }
+
+    return defaultImage;
+};
 
 interface Ruta {
-  id: number;
-  nombre: string;
-  codigo?: string;
+    id: number;
+    nombre: string;
+    codigo?: string;
 }
 
 interface RutasListProps {
-  empresaId: number;
-  empresaNombre?: string;
-  onBack: () => void;
-  onRutaClick: (rutaId: number) => void;
+    empresaId: number;
+    empresaNombre?: string;
+    onBack: () => void;
+    onRutaClick: (rutaId: number) => void;
 }
 
-const API_BASE_URL = 'http://localhost:8000';
-
 const RutasList = ({ empresaId, empresaNombre, onBack, onRutaClick }: RutasListProps) => {
-  const [rutas, setRutas] = useState<Ruta[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+    // --- LÓGICA DE ESTADO Y FETCHING ---
+    const [rutas, setRutas] = useState<Ruta[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchRutas = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/rutas/empresas/${empresaId}/rutas/`);
-        if (!response.ok) throw new Error('Error al cargar rutas');
-        const data = await response.json();
-        setRutas(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error desconocido');
-      } finally {
-        setLoading(false);
-      }
-    };
+    useEffect(() => {
+        const fetchRutas = async () => {
+            try {
+                setLoading(true);
+                const response = await fetch(`http://localhost:8000/api/rutas/empresas/${empresaId}/rutas/`);
+                if (!response.ok) throw new Error('Error al cargar rutas');
+                const data = await response.json();
+                setRutas(data);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'Error desconocido');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchRutas();
+    }, [empresaId]);
+    // --- FIN DE LA LÓGICA ---
 
-    fetchRutas();
-  }, [empresaId]);
+    if (loading) {
+        return <div className="flex justify-center p-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div></div>;
+    }
+    if (error) {
+        return <div className="p-10 text-center text-red-500">{error}</div>;
+    }
 
-  if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-gray-600 hover:text-red-600 font-medium mb-6 transition-colors duration-200"
-        >
-          <ArrowLeft size={20} />
-          <span>Volver a empresas</span>
-        </button>
-        <div className="flex flex-col justify-center items-center p-12">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <div className="text-lg font-medium text-gray-600">Cargando rutas...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-gray-600 hover:text-red-600 font-medium mb-6 transition-colors duration-200"
-        >
-          <ArrowLeft size={20} />
-          <span>Volver a empresas</span>
-        </button>
-        <div className="max-w-2xl mx-auto mt-8">
-          <div className="bg-red-50 border-l-4 border-red-500 px-6 py-4 rounded-lg shadow-sm">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-red-800">Error al cargar rutas</p>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      {/* Botón volver */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 text-gray-600 hover:text-red-600 font-medium mb-6 transition-colors duration-200 group"
-      >
-        <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform duration-200" />
-        <span>Volver a empresas</span>
-      </button>
-
-      {/* Header */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-orange-400 rounded-xl flex items-center justify-center shadow-md">
-            <Route size={28} className="text-white" strokeWidth={2.5} />
-          </div>
-          <div>
-            <h2 className="text-3xl font-bold text-gray-800">
-              Rutas de {empresaNombre || 'la Empresa'}
-            </h2>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex items-center gap-1 text-gray-600">
-                <MapPin size={16} />
-                <span className="text-sm font-medium">{rutas.length} rutas disponibles</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Grid de Rutas */}
-      {rutas.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 px-4 bg-white rounded-xl shadow-sm">
-          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <Route size={40} className="text-gray-400" />
-          </div>
-          <h3 className="text-xl font-semibold text-gray-700 mb-2">No hay rutas disponibles</h3>
-          <p className="text-gray-500 text-center">
-            Esta empresa no tiene rutas registradas en este momento
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {rutas.map((ruta) => (
+        <div className="max-w-7xl mx-auto px-4 py-8">
+            {/* Navbar Minimalista para volver */}
             <button
-              key={ruta.id}
-              onClick={() => {
-                console.log('Ruta clickeada:', ruta.id);
-                onRutaClick(ruta.id);
-              }}
-              className="group relative bg-white hover:bg-gradient-to-br hover:from-orange-50 hover:to-red-50 border border-gray-200 hover:border-orange-300 rounded-xl p-6 text-left transition-all duration-300 shadow-sm hover:shadow-lg transform hover:-translate-y-1"
+                onClick={onBack}
+                className="mb-8 flex items-center gap-2 text-gray-500 hover:text-orange-600 transition-colors font-medium px-4 py-2 hover:bg-orange-50 rounded-full w-fit"
             >
-              {/* Header de la card */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-10 h-10 bg-gradient-to-br from-orange-100 to-red-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <Navigation size={20} className="text-red-600" />
-                    </div>
-                    {ruta.codigo && (
-                      <span className="bg-gradient-to-r from-red-500 to-orange-400 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
-                        {ruta.codigo}
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 group-hover:text-red-600 transition-colors duration-300">
-                    {ruta.nombre}
-                  </h3>
-                </div>
-              </div>
-
-              {/* Footer de la card */}
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                <span className="text-xs text-gray-500 font-medium">ID: {ruta.id}</span>
-                <div className="flex items-center gap-1 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <span className="text-xs font-medium">Ver detalles</span>
-                  <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-
-              {/* Decoración hover */}
-              <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-orange-400 rounded-b-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <ArrowLeft size={20} />
+                <span>Volver al catálogo</span>
             </button>
-          ))}
+
+            {/* Header de la Empresa */}
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-3xl p-8 mb-10 text-white shadow-xl flex items-center justify-between relative overflow-hidden">
+                {/* Decoración de fondo */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+                
+                <div className="relative z-10">
+                    <h2 className="text-3xl md:text-4xl font-bold mb-2">
+                        {empresaNombre || 'Rutas Disponibles'}
+                    </h2>
+                    <div className="flex items-center gap-2 text-gray-300">
+                        <Route size={18} />
+                        <span>Explora los recorridos y paraderos</span>
+                    </div>
+                </div>
+                
+                <div className="hidden md:flex flex-col items-end relative z-10">
+                    <span className="text-4xl font-bold text-orange-500">{rutas.length}</span>
+                    <span className="text-sm text-gray-400 uppercase tracking-wider">Rutas Activas</span>
+                </div>
+            </div>
+
+            {/* Grid de Rutas */}
+            {rutas.length === 0 ? (
+                <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                    <p className="text-gray-500">No hay rutas registradas.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {rutas.map((ruta) => (
+                        <button
+                            key={ruta.id}
+                            onClick={() => onRutaClick(ruta.id)}
+                            className="group bg-white rounded-2xl shadow-sm hover:shadow-xl border border-gray-100 overflow-hidden text-left transition-all duration-300 flex flex-col h-full hover:-translate-y-1"
+                        >
+                            {/* 1. Imagen Superior Corta (Cuerpo del Bus) */}
+                            <div className="h-32 w-full relative overflow-hidden">
+                                <div className="absolute inset-0 bg-gray-900/40 group-hover:bg-gray-900/20 transition-colors z-10"></div>
+                                <img 
+                                    src={getEmpresaRouteImage(empresaNombre)} 
+                                    alt={`Ruta de ${empresaNombre}`} 
+                                    className="w-full h-full object-cover"
+                                />
+                                {/* EL CÓDIGO DE RUTA FUE MOVIDO ABAJO para no solapar el nombre */}
+                            </div>
+
+                            {/* 2. Contenido de la Tarjeta (Nombre y Badge de Código) */}
+                            <div className="p-6 flex-1 flex flex-col">
+                                
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-lg font-bold text-gray-800 leading-tight group-hover:text-orange-600 transition-colors">
+                                        {ruta.nombre}
+                                    </h3>
+                                    
+                                    {/* ✅ CÓDIGO DE RUTA COMO BADGE (Ahora visible) */}
+                                    {ruta.codigo && (
+                                        <span className="bg-orange-600 text-white font-black text-xs px-3 py-1 rounded-full shadow-md transform group-hover:scale-105 transition-transform duration-200">
+                                            {ruta.codigo}
+                                        </span>
+                                    )}
+                                </div>
+                                
+                                {/* Footer de la tarjeta */}
+                                <div className="mt-auto pt-4 flex items-center justify-between text-xs text-gray-500 border-t border-gray-100">
+                                    <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-md">
+                                        <Clock size={12} />
+                                        <span>Frecuente</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-orange-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                                        Ver detalle <Navigation size={12} />
+                                    </div>
+                                </div>
+                            </div>
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default RutasList;

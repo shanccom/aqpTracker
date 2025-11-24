@@ -448,7 +448,7 @@ export default function Home() {
   const rutasAproximadasCount = rutasDirectas.filter(r => r.distancia_a_destino > 200).length;
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-[calc(100vh-90px)] bg-gray-50">
       
       {/* PANEL LATERAL (SIDEBAR) */}
       <div className="w-96 bg-white shadow-xl z-10 flex flex-col">
@@ -782,12 +782,16 @@ export default function Home() {
         </div>
       </div>
 
-      {/* MAPA */}
-      <div className="flex-1 relative">
-        <div ref={mapContainerRef} className="w-full h-full" style={{ zIndex: 0 }} />
+      {/* MAPA CON BORDE Y SEPARACIÓN VISUAL */}
+      <div className="flex-1 relative p-4">
+        <div 
+          ref={mapContainerRef} 
+          className="w-full h-full rounded-2xl shadow-lg border border-gray-200 overflow-hidden" 
+          style={{ zIndex: 0 }} 
+        />
         
         {/* Instrucción flotante */}
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg text-sm font-medium text-gray-700 border border-gray-200 z-[1000]">
+        <div className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg text-sm font-medium text-gray-700 border border-gray-200 z-[1000]">
           {modoSeleccion === 'A' ? '📍 Haz click en el mapa para el punto de INICIO' : '🏁 Haz click para el punto de DESTINO'}
         </div>
       </div>
